@@ -12,6 +12,7 @@ async function req(path, opts = {}) {
 
 export const api = {
   bootstrap: () => req('/bootstrap'),
+  timetable: () => req('/timetable'),
   createClass: (b) => req('/classes', { method: 'POST', body: JSON.stringify(b) }),
   classDetail: (id) => req('/classes/' + id),
   activeSession: (cid) => req('/classes/' + cid + '/active'),

@@ -113,7 +113,10 @@ export default function TeacherSession({ id }) {
           )}
         </div>
         <div className="muted small" style={{ marginTop: 6 }}>
-          {s.className} · 🏫 {s.roomName} · 围栏半径 {s.radiusMeters}m
+          {s.className}
+          {s.building ? ` · 🏢 ${s.building}` : ''}
+          {s.roomName ? ` · 🏫 ${s.roomName}` : ''}
+          {' · '}围栏半径 {s.radiusMeters}m
         </div>
 
         <div className="grid c2" style={{ marginTop: 16 }}>

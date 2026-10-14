@@ -51,6 +51,13 @@ CREATE INDEX IF NOT EXISTS idx_records_session ON records(sessionId);
 CREATE INDEX IF NOT EXISTS idx_sessions_class ON sessions(classId);
 `);
 
+// 兼容旧库：为 sessions 增补课程/楼宇字段（幂等）
+{
+  const cols = db.prepare('PRAGMA table_info(sessions)').all().map((c) => c.name);
+  if (!cols.includes('course')) db.exec('ALTER TABLE sessions ADD COLUMN course TEXT');
+  if (!cols.includes('building')) db.exec('ALTER TABLE sessions ADD COLUMN building TEXT');
+}
+
 export { db };
 
 /* ---------------- students ---------------- */
@@ -85,10 +92,10 @@ export function allClasses() {
 
 export function insertSession(s) {
   db.prepare(
-    `INSERT INTO sessions (id, classId, title, roomName, lat, lng, radiusMeters, startAt, endAt, status, secret)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO sessions (id, classId, title, course, building, roomName, lat, lng, radiusMeters, startAt, endAt, status, secret)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
-    s.id, s.classId, s.title, s.roomName,
+    s.id, s.classId, s.title, s.course || '', s.building || '', s.roomName,
     s.center.lat, s.center.lng, s.radiusMeters,
     s.startAt, s.endAt, s.status,
     s.secret.toString('hex'),

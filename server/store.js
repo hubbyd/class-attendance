@@ -17,15 +17,85 @@ export const uid = (p = 'id_') => p + crypto.randomBytes(6).toString('hex');
 // 动态口令/二维码轮换周期（毫秒）
 export const PASSCODE_PERIOD_MS = 15000;
 
-// 演示用学生名册
+// 软件2402班学生名册（学号 + 姓名；不含手机号等隐私信息）
 export const STUDENTS = [
-  { id: 's01', name: '张三', studentNo: '20210101' },
-  { id: 's02', name: '李四', studentNo: '20210102' },
-  { id: 's03', name: '王五', studentNo: '20210103' },
-  { id: 's04', name: '赵六', studentNo: '20210104' },
-  { id: 's05', name: '钱七', studentNo: '20210105' },
-  { id: 's06', name: '孙八', studentNo: '20210106' },
+  { id: 's2431081147', name: '许东宁', studentNo: '2431081147' },
+  { id: 's2431211144', name: '刘思甜', studentNo: '2431211144' },
+  { id: 's2431241108', name: '郝钰东', studentNo: '2431241108' },
+  { id: 's2431271201', name: '邓博瀚', studentNo: '2431271201' },
+  { id: 's2431271202', name: '王佳鹏', studentNo: '2431271202' },
+  { id: 's2431271203', name: '杨军军', studentNo: '2431271203' },
+  { id: 's2431271204', name: '姚元乐', studentNo: '2431271204' },
+  { id: 's2431271205', name: '向一鸣', studentNo: '2431271205' },
+  { id: 's2431271206', name: '赵一龙', studentNo: '2431271206' },
+  { id: 's2431271207', name: '王羿博', studentNo: '2431271207' },
+  { id: 's2431271208', name: '赵文卓', studentNo: '2431271208' },
+  { id: 's2431271209', name: '丁一凡', studentNo: '2431271209' },
+  { id: 's2431271210', name: '高铭启', studentNo: '2431271210' },
+  { id: 's2431271211', name: '张润新', studentNo: '2431271211' },
+  { id: 's2431271212', name: '刘奕恒', studentNo: '2431271212' },
+  { id: 's2431271213', name: '贾景顺', studentNo: '2431271213' },
+  { id: 's2431271215', name: '路琰', studentNo: '2431271215' },
+  { id: 's2431271216', name: '刘佳奇', studentNo: '2431271216' },
+  { id: 's2431271217', name: '郭昊同', studentNo: '2431271217' },
+  { id: 's2431271218', name: '姚佳坤', studentNo: '2431271218' },
+  { id: 's2431271219', name: '薛浩晨', studentNo: '2431271219' },
+  { id: 's2431271220', name: '朱海瑞', studentNo: '2431271220' },
+  { id: 's2431271221', name: '张和浩', studentNo: '2431271221' },
+  { id: 's2431271222', name: '蒋籽航', studentNo: '2431271222' },
+  { id: 's2431271223', name: '郝瑞星', studentNo: '2431271223' },
+  { id: 's2431271224', name: '王涛', studentNo: '2431271224' },
+  { id: 's2431271225', name: '史志成', studentNo: '2431271225' },
+  { id: 's2431271226', name: '付文强', studentNo: '2431271226' },
+  { id: 's2431271227', name: '李鑫', studentNo: '2431271227' },
+  { id: 's2431271228', name: '李柏龙', studentNo: '2431271228' },
+  { id: 's2431271230', name: '杨凤仪', studentNo: '2431271230' },
+  { id: 's2431271231', name: '龚洁雅', studentNo: '2431271231' },
+  { id: 's2431271232', name: '董美妙', studentNo: '2431271232' },
+  { id: 's2431271233', name: '冯佳源', studentNo: '2431271233' },
+  { id: 's2431271234', name: '赵欣宇', studentNo: '2431271234' },
+  { id: 's2431271235', name: '姚一晨', studentNo: '2431271235' },
+  { id: 's2431271236', name: '周星怡', studentNo: '2431271236' },
+  { id: 's2431271237', name: '董涵瑾', studentNo: '2431271237' },
+  { id: 's2431271238', name: '王怡欣', studentNo: '2431271238' },
+  { id: 's2431271239', name: '王张敏', studentNo: '2431271239' },
+  { id: 's2431271240', name: '赵怡欣', studentNo: '2431271240' },
+  { id: 's2431271241', name: '孙景怡', studentNo: '2431271241' },
+  { id: 's2431271242', name: '肖羽彤', studentNo: '2431271242' },
+  { id: 's2431271244', name: '张梓烨', studentNo: '2431271244' },
+  { id: 's2431271245', name: '王沛茹', studentNo: '2431271245' },
+  { id: 's2431271246', name: '郭嘉睿', studentNo: '2431271246' },
+  { id: 's2431271247', name: '孙琦', studentNo: '2431271247' },
+  { id: 's2431271248', name: '张玉茹', studentNo: '2431271248' },
+  { id: 's2431271249', name: '胡漠雪', studentNo: '2431271249' },
+  { id: 's2431271250', name: '沙莹莹', studentNo: '2431271250' },
 ];
+
+// 软件2402班课程表（来自班级课表；day: 1=周一…7=周日）
+// 用于「按当天课程」自动带出本节次的上课教室
+export const TIMETABLE = [
+  { day: 3, section: '1-2', course: '操作系统', room: '2号教学楼403', building: '2号教学楼', teacher: '李建廷', weeks: '1-15周(单)' },
+  { day: 4, section: '1-2', course: '互联网+创业', room: '1号教学楼101', building: '1号教学楼', teacher: '谢晶', weeks: '1-16周' },
+  { day: 5, section: '1-2', course: '软件工程', room: '实验楼401', building: '实验楼', teacher: '史西兵', weeks: '1-15周(单)' },
+  { day: 2, section: '3-4', course: '软件项目管理', room: '实验楼316', building: '实验楼', teacher: '查欣洁', weeks: '9-16周' },
+  { day: 3, section: '3-4', course: '软件工程', room: '实验楼402', building: '实验楼', teacher: '史西兵', weeks: '1-16周' },
+  { day: 4, section: '3-4', course: '软件项目管理', room: '实验楼316', building: '实验楼', teacher: '查欣洁', weeks: '9-16周' },
+  { day: 5, section: '3-4', course: '编译原理', room: '实验楼502', building: '实验楼', teacher: '李梦阁', weeks: '1-16周' },
+  { day: 1, section: '5-6', course: '大学英语听说', room: '实验楼204', building: '实验楼', teacher: '张稚敏', weeks: '1-16周' },
+  { day: 2, section: '5-6', course: '习近平新时代中国特色社会主义思想概论', room: '2号教学楼302', building: '2号教学楼', teacher: '杨璐静', weeks: '1-16周' },
+  { day: 5, section: '5-6', course: 'Java Web 开发技术', room: '实验楼407', building: '实验楼', teacher: '刘通', weeks: '1-15周(单)' },
+  { day: 1, section: '7-8', course: '操作系统', room: '2号教学楼109', building: '2号教学楼', teacher: '李建廷', weeks: '1-16周' },
+  { day: 2, section: '7-8', course: 'Java Web 开发技术', room: '实验楼408', building: '实验楼', teacher: '刘通', weeks: '1-16周' },
+  { day: 4, section: '7-8', course: '习近平新时代中国特色社会主义思想概论', room: '2号教学楼109', building: '2号教学楼', teacher: '杨璐静', weeks: '2-16周(双)' },
+];
+
+// 节次对应的上课时间（供前端按浏览器本地时间匹配本节次课程）
+export const SECTION_TIMES = {
+  '1-2': { start: '08:00', end: '09:40' },
+  '3-4': { start: '10:00', end: '11:40' },
+  '5-6': { start: '14:00', end: '15:40' },
+  '7-8': { start: '16:00', end: '17:40' },
+};
 
 // 内存态（启动时从 SQLite 水化）
 export const classes = [];
@@ -92,13 +162,17 @@ export function createSession(classId, input = {}) {
   const cls = classes.find((c) => c.id === classId);
   if (!cls) throw new Error('班级不存在');
   const durationMin = Number(input.durationMin) || 10;
+  // 围栏中心：优先学委在教室现场取的坐标，精确到本栋楼；未取点时回退班级默认坐标
+  const hasPoint = input.lat != null && input.lng != null && input.lat !== '' && input.lng !== '';
   const s = {
     id: uid('cs_'),
     classId,
     title: input.title || '课堂签到',
-    center: { lat: cls.lat, lng: cls.lng },
-    radiusMeters: cls.radiusMeters,
-    roomName: cls.roomName,
+    course: input.course || '',
+    building: input.building || '',
+    center: hasPoint ? { lat: Number(input.lat), lng: Number(input.lng) } : { lat: cls.lat, lng: cls.lng },
+    radiusMeters: Number(input.radiusMeters) || cls.radiusMeters,
+    roomName: input.roomName || cls.roomName,
     startAt: now(),
     endAt: now() + durationMin * 60000,
     status: 'active',

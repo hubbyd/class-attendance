@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   STUDENTS,
+  TIMETABLE,
+  SECTION_TIMES,
   classes,
   sessions,
   seed,
@@ -91,6 +93,8 @@ function sessionDTO(s) {
     classId: s.classId,
     className: cls ? cls.name : '',
     title: s.title,
+    course: s.course || '',
+    building: s.building || '',
     roomName: s.roomName,
     center: s.center,
     radiusMeters: s.radiusMeters,
@@ -135,6 +139,16 @@ const server = http.createServer(async (req, res) => {
         pub = `${proto}://${host}`;
       }
       return send(res, 200, { publicUrl: String(pub).replace(/\/$/, '') });
+    }
+
+    // 课表：返回完整课表 + 节次时间 + 楼宇列表
+    // 由前端按浏览器本地时间匹配（服务端在云端通常为 UTC，时区会不一致）
+    if (m === 'GET' && p === '/api/timetable') {
+      return send(res, 200, {
+        timetable: TIMETABLE,
+        sections: SECTION_TIMES,
+        buildingPresets: [...new Set(TIMETABLE.map((x) => x.building).filter(Boolean))],
+      });
     }
 
     // 初始化数据
