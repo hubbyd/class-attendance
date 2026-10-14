@@ -40,14 +40,14 @@ export default function TeacherSession({ id }) {
 
   const studentLink = useMemo(() => {
     if (!s) return '';
-    return `${publicUrl}#/student?sid=${s.id}&code=${s.passcode || ''}`;
-  }, [s?.id, s?.passcode, publicUrl]);
+    return `${publicUrl.replace(/\/$/, '')}/#/student?class=${s.classId}`;
+  }, [s?.classId, publicUrl]);
 
   useEffect(() => {
-    if (studentLink && s?.status === 'active') {
+    if (studentLink) {
       QRCode.toDataURL(studentLink, { width: 220, margin: 1 }).then(setQr).catch(() => {});
     }
-  }, [studentLink, s?.status]);
+  }, [studentLink]);
 
   async function copyLink() {
     const link = studentLink;
@@ -118,33 +118,31 @@ export default function TeacherSession({ id }) {
 
         <div className="grid c2" style={{ marginTop: 16 }}>
           <div>
-            <h3>分享签到链接到班级群</h3>
-            {s.status === 'active' ? (
-              <>
-                <div className="link-box">
-                  <span className="mono link-text">{studentLink}</span>
-                </div>
-                <div className="row" style={{ marginTop: 10 }}>
-                  <button className="btn primary" onClick={copyLink} style={{ flex: 1 }}>
-                    📋 复制签到链接到班级群
-                  </button>
-                </div>
-                {copied && (
-                  <div className="banner ok" style={{ marginTop: 10 }}>
-                    已复制到剪贴板，可直接粘贴到班级群
-                  </div>
-                )}
-                <div className="hint" style={{ marginTop: 10 }}>
-                  同学在群里点开链接即可签到，口令已自动带入，无需手动输入。
-                </div>
-                {qr && <img className="qr" src={qr} width={200} height={200} style={{ marginTop: 12 }} alt="签到二维码" />}
-                <div className="hint" style={{ marginTop: 8 }}>
-                  也可现场扫码（备用方式）· 口令 <b>{s.passcode}</b> · <b style={{ color: 'var(--brand)' }}>{s.secondsToRotate}s</b> 后刷新 · 剩余 {mm}:{ss}
-                </div>
-              </>
-            ) : (
-              <div className="banner warn">签到已结束，链接与口令均已失效</div>
+            <h3>固定签到入口（长期有效）</h3>
+            <div className="link-box">
+              <span className="mono link-text">{studentLink}</span>
+            </div>
+            <div className="row" style={{ marginTop: 10 }}>
+              <button className="btn primary" onClick={copyLink} style={{ flex: 1 }}>
+                📋 复制固定签到链接
+              </button>
+            </div>
+            {copied && (
+              <div className="banner ok" style={{ marginTop: 10 }}>
+                已复制到剪贴板，可直接粘贴到班级群（长期有效，不用每次重新发）
+              </div>
             )}
+            <div className="hint" style={{ marginTop: 10 }}>
+              链接与二维码永久不变，群里发一次即可。每次上课学委点「发起签到」，同学点开链接就能签，口令自动带入。
+            </div>
+            {qr && <img className="qr" src={qr} width={200} height={200} style={{ marginTop: 12 }} alt="签到二维码" />}
+            <div className="hint" style={{ marginTop: 8 }}>
+              {s.status === 'active' ? (
+                <>本次签到进行中，剩余 {mm}:{ss}（口令 {s.passcode} 自动带入，学生无需输入）</>
+              ) : (
+                <>本次签到已结束，链接仍可继续用于下一节课</>
+              )}
+            </div>
           </div>
           <div>
             <h3>实时统计</h3>

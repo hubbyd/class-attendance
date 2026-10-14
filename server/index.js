@@ -166,6 +166,20 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // 班级固定入口：查询该班「当前进行中」的签到（学生点固定链接时自动解析）
+    mm = p.match(/^\/api\/classes\/([^/]+)\/active$/);
+    if (m === 'GET' && mm) {
+      const c = classes.find((x) => x.id === mm[1]);
+      if (!c) return send(res, 404, { error: '班级不存在' });
+      const active = [...sessions].reverse().find(
+        (x) => x.classId === c.id && x.status === 'active' && now() <= x.endAt,
+      );
+      if (!active) {
+        return send(res, 200, { active: false, classId: c.id, className: c.name, roomName: c.roomName });
+      }
+      return send(res, 200, { active: true, classId: c.id, session: sessionDTO(active) });
+    }
+
     // 发起签到（创建场次）
     mm = p.match(/^\/api\/classes\/([^/]+)\/sessions$/);
     if (m === 'POST' && mm) {

@@ -27,7 +27,7 @@ export default function App() {
   if (route.path.startsWith('/teacher')) page = <Teacher />;
   else if (route.path.startsWith('/session')) page = <TeacherSession id={route.params.get('id')} />;
   else if (route.path.startsWith('/student'))
-    page = <Student sid={route.params.get('sid')} code={route.params.get('code')} />;
+    page = <Student sid={route.params.get('sid')} classId={route.params.get('class')} />;
 
   return (
     <>

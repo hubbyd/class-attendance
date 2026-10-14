@@ -3,10 +3,11 @@ import { api } from '../api.js';
 import { deviceFingerprint } from '../fingerprint.js';
 import { FLAG_LABEL } from '../flags.js';
 
-export default function Student({ sid }) {
+export default function Student({ sid, classId }) {
   const [sessionId, setSessionId] = useState(sid || '');
   const [s, setS] = useState(null);
   const [err, setErr] = useState('');
+  const [classInfo, setClassInfo] = useState(null);
 
   const [studentId, setStudentId] = useState('');
   const [method, setMethod] = useState('gps');
@@ -18,17 +19,41 @@ export default function Student({ sid }) {
 
   const fp = useRef(deviceFingerprint());
 
+  // sid 模式：按场次编号直接加载
   useEffect(() => {
     if (!sid) return;
     api.session(sid).then(setS).catch((e) => setErr(e.message));
   }, [sid]);
 
-  // 轮询场次：既用于刷新状态，也用于自动带入当前动态口令
+  // 固定班级入口模式：轮询「该班当前进行中的签到」，学委发起后自动出现
   useEffect(() => {
+    if (!classId) return;
+    let stop = false;
+    const poll = async () => {
+      try {
+        const a = await api.activeSession(classId);
+        if (stop) return;
+        setClassInfo({ className: a.className, roomName: a.roomName });
+        setS(a.active ? a.session : null);
+      } catch (e) {
+        if (!stop) setErr(e.message);
+      }
+    };
+    poll();
+    const t = setInterval(poll, 3000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [classId]);
+
+  // sid 模式：轮询刷新场次状态（班级入口模式由上面的轮询负责）
+  useEffect(() => {
+    if (classId) return;
     if (!s) return;
     const t = setInterval(() => api.session(s.id).then(setS).catch(() => {}), 3000);
     return () => clearInterval(t);
-  }, [s && s.id]);
+  }, [classId, s && s.id]);
 
   async function loadSession() {
     setErr('');
@@ -101,8 +126,27 @@ export default function Student({ sid }) {
     }
   }
 
-  /* ---------- 未进入场次：引导从群里链接进入 ---------- */
+  /* ---------- 未进入场次 ---------- */
   if (!s) {
+    // 固定班级入口：当前没有进行中的签到，等待学委发起
+    if (classId) {
+      return (
+        <div className="wrap narrow">
+          <div className="card" style={{ marginTop: 20 }}>
+            <h2>{classInfo?.className || '班级签到'}</h2>
+            {classInfo?.roomName && (
+              <div className="muted small" style={{ marginTop: 6 }}>🏫 {classInfo.roomName}</div>
+            )}
+            <div className="banner warn" style={{ marginTop: 12 }}>
+              当前没有进行中的签到，请等待学委发起签到。本页面会自动刷新，无需重新打开链接。
+            </div>
+            {err && <div className="banner bad" style={{ marginTop: 12 }}>{err}</div>}
+          </div>
+        </div>
+      );
+    }
+
+    // 兼容：按场次编号手动进入
     return (
       <div className="wrap narrow">
         <div className="card" style={{ marginTop: 20 }}>

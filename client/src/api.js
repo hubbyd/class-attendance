@@ -14,6 +14,7 @@ export const api = {
   bootstrap: () => req('/bootstrap'),
   createClass: (b) => req('/classes', { method: 'POST', body: JSON.stringify(b) }),
   classDetail: (id) => req('/classes/' + id),
+  activeSession: (cid) => req('/classes/' + cid + '/active'),
   createSession: (cid, b) => req(`/classes/${cid}/sessions`, { method: 'POST', body: JSON.stringify(b) }),
   session: (id) => req('/sessions/' + id),
   endSession: (id) => req(`/sessions/${id}/end`, { method: 'POST', body: '{}' }),
