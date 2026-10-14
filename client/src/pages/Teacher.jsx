@@ -6,7 +6,7 @@ import { navigate } from '../App.jsx';
 export default function Teacher() {
   const [classes, setClasses] = useState([]);
   const [err, setErr] = useState('');
-  const [form, setForm] = useState({ name: '', roomName: '', lat: '31.23037', lng: '121.47370', radiusMeters: '120' });
+  const [form, setForm] = useState({ name: '', roomName: '', lat: '34.116844', lng: '108.929497', radiusMeters: '800' });
   const [showNew, setShowNew] = useState(false);
   const [publicUrl, setPublicUrl] = useState(window.location.origin);
   const [qr, setQr] = useState({});

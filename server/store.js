@@ -134,23 +134,18 @@ export function hydrate() {
 }
 
 export function seed() {
-  // 仅当库内尚无班级时播种演示数据
+  // 仅当库内尚无班级时播种：西安财经大学 长安校区 · 软件2402班
   if (classes.length === 0) {
-    const c1 = createClass({
-      name: '软件工程 2021-1 班',
-      roomName: '教学楼 A-302',
-      lat: 31.23037,
-      lng: 121.4737,
-      radiusMeters: 120,
-    });
     createClass({
-      name: '数据结构 2022-2 班',
-      roomName: '实验楼 B-105',
-      lat: 31.2318,
-      lng: 121.476,
-      radiusMeters: 80,
+      name: '软件2402班',
+      roomName: '西安财经大学·长安校区',
+      // 长安校区坐标（WGS-84，与手机浏览器定位一致）：西安市长安区常宁大街360号
+      lat: 34.116844,
+      lng: 108.929497,
+      // 课表涉及 1号教学楼 / 2号教学楼 / 实验楼 等多个楼宇，
+      // 故围栏覆盖整个校区核心区（可按需收窄）
+      radiusMeters: 800,
     });
-    return c1;
   }
   return classes[0];
 }
