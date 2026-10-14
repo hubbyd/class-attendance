@@ -1,0 +1,19 @@
+{
+  "name": "class-attendance",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "防作弊课堂考勤原型：定位围栏签到 / 拍照活体签到 / 动态口令二维码 / 设备指纹拦截",
+  "scripts": {
+    "dev": "concurrently -n server,client -c green,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node server/index.js",
+    "dev:client": "npm --prefix client run dev",
+    "install:all": "npm install && npm --prefix client install",
+    "build": "npm --prefix client run build",
+    "start": "node server/index.js",
+    "online": "bash scripts/online.sh"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

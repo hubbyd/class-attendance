@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: class-attendance
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
