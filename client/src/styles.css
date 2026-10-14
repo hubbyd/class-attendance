@@ -108,6 +108,15 @@ tr:last-child td { border-bottom: none; }
 }
 .qr { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #fff; }
 
+.link-box {
+  border: 1px dashed var(--line); border-radius: 12px; background: #f8fafc;
+  padding: 12px 14px; margin-top: 12px; overflow-x: auto;
+}
+.link-text {
+  font-size: 13px; color: #334155; word-break: break-all; white-space: normal;
+  -webkit-user-select: all; user-select: all;
+}
+
 .step { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
 .step .n { width: 26px; height: 26px; border-radius: 50%; background: #e2e8f0; color: #475569; display: grid; place-items: center; font-size: 13px; font-weight: 800; flex: none; }
 .step.active .n { background: var(--brand); color: #fff; }

@@ -12,6 +12,7 @@ export default function TeacherSession({ id }) {
   const [tick, setTick] = useState(Date.now());
   const [reviewing, setReviewing] = useState(null);
   const [publicUrl, setPublicUrl] = useState(window.location.origin);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     api.config && fetch('/api/config').then((r) => r.json()).then((c) => c.publicUrl && setPublicUrl(c.publicUrl)).catch(() => {});
@@ -47,6 +48,24 @@ export default function TeacherSession({ id }) {
       QRCode.toDataURL(studentLink, { width: 220, margin: 1 }).then(setQr).catch(() => {});
     }
   }, [studentLink, s?.status]);
+
+  async function copyLink() {
+    const link = studentLink;
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // 微信内置浏览器可能不支持 clipboard API，降级为手动选中
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
 
   async function doReview(record, action) {
     try {
@@ -99,20 +118,32 @@ export default function TeacherSession({ id }) {
 
         <div className="grid c2" style={{ marginTop: 16 }}>
           <div>
-            <h3>动态口令 / 二维码</h3>
+            <h3>分享签到链接到班级群</h3>
             {s.status === 'active' ? (
               <>
-                <div className="passcode">{s.passcode}</div>
-                <div className="hint" style={{ marginTop: 8 }}>
-                  <b style={{ color: 'var(--brand)' }}>{s.secondsToRotate}s</b> 后自动刷新，过期口令无法签到
+                <div className="link-box">
+                  <span className="mono link-text">{studentLink}</span>
                 </div>
-                {qr && <img className="qr" src={qr} width={220} height={220} style={{ marginTop: 12 }} alt="签到二维码" />}
+                <div className="row" style={{ marginTop: 10 }}>
+                  <button className="btn primary" onClick={copyLink} style={{ flex: 1 }}>
+                    📋 复制签到链接到班级群
+                  </button>
+                </div>
+                {copied && (
+                  <div className="banner ok" style={{ marginTop: 10 }}>
+                    已复制到剪贴板，可直接粘贴到班级群
+                  </div>
+                )}
+                <div className="hint" style={{ marginTop: 10 }}>
+                  同学在群里点开链接即可签到，口令已自动带入，无需手动输入。
+                </div>
+                {qr && <img className="qr" src={qr} width={200} height={200} style={{ marginTop: 12 }} alt="签到二维码" />}
                 <div className="hint" style={{ marginTop: 8 }}>
-                  学生可扫码或输入口令 → 剩余时间 {mm}:{ss}
+                  也可现场扫码（备用方式）· 口令 <b>{s.passcode}</b> · <b style={{ color: 'var(--brand)' }}>{s.secondsToRotate}s</b> 后刷新 · 剩余 {mm}:{ss}
                 </div>
               </>
             ) : (
-              <div className="banner warn">签到已结束，口令已失效</div>
+              <div className="banner warn">签到已结束，链接与口令均已失效</div>
             )}
           </div>
           <div>

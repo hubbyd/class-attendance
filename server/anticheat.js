@@ -72,10 +72,12 @@ export function verify(session, p) {
     else if (acc > 150) flags.push(FLAGS.GEO_LOW_ACCURACY);
   }
 
-  // 6) 拍照 + 活体（防照片/截图代签、同图复用）
+  // 6) 拍照（防照片/同图复用）
+  // 采用系统相机时客户端只上传单张照片、不提供帧间运动量，
+  // 因此仅当客户端确实提供了运动数据时才做活体判定，避免误判为活体失败。
   if (p.checkinType === 'photo') {
     if (!p.photo) flags.push(FLAGS.PHOTO_MISSING);
-    if (!(Number(p.motionScore) >= MOTION_THRESHOLD)) flags.push(FLAGS.LIVENESS_FAIL);
+    if (p.motionScore != null && !(Number(p.motionScore) >= MOTION_THRESHOLD)) flags.push(FLAGS.LIVENESS_FAIL);
     if (p.photo) {
       const h = sha(p.photo);
       const holder = session.photoHashes.get(h);
