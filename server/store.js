@@ -74,7 +74,7 @@ export function rebuildSessionIndexes(session) {
 
 export function createClass(input) {
   const cls = {
-    id: uid('c_'),
+    id: input.id || uid('c_'),
     name: input.name,
     roomName: input.roomName,
     lat: Number(input.lat),
@@ -137,6 +137,8 @@ export function seed() {
   // 仅当库内尚无班级时播种：西安财经大学 长安校区 · 软件2402班
   if (classes.length === 0) {
     createClass({
+      // 固定班级 id：保证固定签到入口链接在每次重新部署后依然不变
+      id: 'c_soft2402',
       name: '软件2402班',
       roomName: '西安财经大学·长安校区',
       // 长安校区坐标（WGS-84，与手机浏览器定位一致）：西安市长安区常宁大街360号
