@@ -24,6 +24,10 @@ import { verify, review } from './anticheat.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
 
+// 学委口令：可用环境变量 TEACHER_CODE 覆盖，默认 2402（软件2402班）
+const TEACHER_CODE = process.env.TEACHER_CODE || '2402';
+const teacherAuthed = (req) => String(req.headers['x-teacher-code'] || '') === TEACHER_CODE;
+
 // 先从 SQLite 水化历史数据，再按需播种演示班级
 hydrate();
 seed();
@@ -35,7 +39,7 @@ function send(res, code, obj) {
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type,x-teacher-code',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   });
   res.end(body);
@@ -119,7 +123,7 @@ const server = http.createServer(async (req, res) => {
   if (m === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type,x-teacher-code',
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     });
     return res.end();
@@ -160,8 +164,16 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // 校验学委口令（学委端进入前调用）
+    if (m === 'POST' && p === '/api/teacher/verify') {
+      const body = await readBody(req);
+      if (String(body.code || '') !== TEACHER_CODE) return send(res, 401, { error: '口令不正确' });
+      return send(res, 200, { ok: true });
+    }
+
     // 新建班级
     if (m === 'POST' && p === '/api/classes') {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
       const body = await readBody(req);
       if (!body.name || !body.roomName || body.lat == null || body.lng == null) {
         return send(res, 400, { error: '缺少必要字段（name/roomName/lat/lng）' });
@@ -197,6 +209,7 @@ const server = http.createServer(async (req, res) => {
     // 发起签到（创建场次）
     mm = p.match(/^\/api\/classes\/([^/]+)\/sessions$/);
     if (m === 'POST' && mm) {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
       const body = await readBody(req);
       try {
         const s = createSession(mm[1], body);
@@ -217,6 +230,7 @@ const server = http.createServer(async (req, res) => {
     // 结束签到
     mm = p.match(/^\/api\/sessions\/([^/]+)\/end$/);
     if (m === 'POST' && mm) {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
       const s = sessions.find((x) => x.id === mm[1]);
       if (!s) return send(res, 404, { error: '签到场次不存在' });
       s.status = 'ended';
@@ -261,6 +275,7 @@ const server = http.createServer(async (req, res) => {
     // 教师复核
     mm = p.match(/^\/api\/sessions\/([^/]+)\/records\/([^/]+)\/review$/);
     if (m === 'POST' && mm) {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
       const s = sessions.find((x) => x.id === mm[1]);
       if (!s) return send(res, 404, { error: '签到场次不存在' });
       const body = await readBody(req);

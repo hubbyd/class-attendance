@@ -1,8 +1,17 @@
 const BASE = '/api';
 
+// 学委口令：验证通过后存在本机，后续所有请求自动带上，学委无需重复输入
+export function savedTeacherCode() {
+  try {
+    return localStorage.getItem('teacherCode') || '';
+  } catch {
+    return '';
+  }
+}
+
 async function req(path, opts = {}) {
   const r = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-teacher-code': savedTeacherCode() },
     ...opts,
   });
   const data = await r.json().catch(() => ({}));
@@ -13,6 +22,7 @@ async function req(path, opts = {}) {
 export const api = {
   bootstrap: () => req('/bootstrap'),
   timetable: () => req('/timetable'),
+  teacherVerify: (code) => req('/teacher/verify', { method: 'POST', body: JSON.stringify({ code }) }),
   createClass: (b) => req('/classes', { method: 'POST', body: JSON.stringify(b) }),
   classDetail: (id) => req('/classes/' + id),
   activeSession: (cid) => req('/classes/' + cid + '/active'),
