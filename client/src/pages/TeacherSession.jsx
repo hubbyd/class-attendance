@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../api.js';
 import { FLAG_LABEL, SOFT_FLAGS, STATUS_LABEL, MANUAL_STATUS_OPTIONS } from '../flags.js';
-import { downloadCsv, stamp } from '../export.js';
+import { downloadXlsx, stamp } from '../export.js';
 
 const fmtTime = (t) => new Date(t).toLocaleTimeString('zh-CN', { hour12: false });
 
@@ -129,7 +129,7 @@ export default function TeacherSession({ id }) {
         rec && rec.flags && rec.flags.length ? rec.flags.map((f) => FLAG_LABEL[f] || f).join(' / ') : '',
       ];
     });
-    downloadCsv(`签到明细-${s.course || s.title}-${stamp(s.startAt)}.csv`, header, rows);
+    downloadXlsx(`签到明细-${s.course || s.title}-${stamp(s.startAt)}.xlsx`, '签到明细', header, rows);
   }
 
   return (

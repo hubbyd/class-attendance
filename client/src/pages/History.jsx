@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { navigate } from '../App.jsx';
 import { STATUS_LABEL } from '../flags.js';
-import { downloadCsv, stamp } from '../export.js';
+import { downloadXlsx, stamp } from '../export.js';
 
 const fmt = (t) =>
   new Date(t).toLocaleString('zh-CN', {
@@ -58,7 +58,7 @@ export default function History({ classId }) {
       });
       return [stu.studentNo, stu.name, ...cells, tally.present, tally.late, tally.leave, tally.absent, tally.proxy];
     });
-    downloadCsv(`${data.className}-考勤总表-${stamp(Date.now())}.csv`, header, rows);
+    downloadXlsx(`${data.className}-考勤总表-${stamp(Date.now())}.xlsx`, '考勤总表', header, rows);
   }
 
   return (
@@ -67,7 +67,7 @@ export default function History({ classId }) {
         <div className="row">
           <h2 style={{ flex: 1 }}>签到历史 · {data.className}</h2>
           <button className="btn primary" onClick={exportMatrix} disabled={!data.students.length}>
-            ⬇ 导出考勤总表（Excel/CSV）
+            ⬇ 导出考勤总表（Excel）
           </button>
           <button className="btn ghost" onClick={() => navigate('/teacher')}>返回学委端</button>
         </div>
