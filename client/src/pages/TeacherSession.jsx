@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../api.js';
 import { FLAG_LABEL, SOFT_FLAGS, STATUS_LABEL, MANUAL_STATUS_OPTIONS } from '../flags.js';
+import { downloadCsv, stamp } from '../export.js';
 
 const fmtTime = (t) => new Date(t).toLocaleTimeString('zh-CN', { hour12: false });
 
@@ -107,6 +108,29 @@ export default function TeacherSession({ id }) {
   const counts = {};
   Object.keys(STATUS_LABEL).forEach((k) => (counts[k] = 0));
   s.roster.forEach((r) => (counts[r.status] = (counts[r.status] || 0) + 1));
+
+  // 导出本次签到明细：每人一行（学号/姓名/状态/时间/方式/距离/异常）
+  function exportDetail() {
+    const byStudent = {};
+    s.records.forEach((r) => {
+      if (!byStudent[r.studentId] || r.createdAt >= byStudent[r.studentId].createdAt) byStudent[r.studentId] = r;
+    });
+    const typeLabel = (t) => (t === 'photo' ? '拍照签到' : t === 'manual' ? '手动标记' : '定位签到');
+    const header = ['学号', '姓名', '状态', '签到时间', '方式', '距离(m)', '异常标记'];
+    const rows = s.roster.map((r) => {
+      const rec = byStudent[r.id];
+      return [
+        r.studentNo,
+        r.name,
+        STATUS_LABEL[r.status] || r.status,
+        rec ? new Date(rec.createdAt).toLocaleString('zh-CN', { hour12: false }) : '',
+        rec ? typeLabel(rec.checkinType) : '',
+        rec && rec.distance != null ? Math.round(rec.distance) : '',
+        rec && rec.flags && rec.flags.length ? rec.flags.map((f) => FLAG_LABEL[f] || f).join(' / ') : '',
+      ];
+    });
+    downloadCsv(`签到明细-${s.course || s.title}-${stamp(s.startAt)}.csv`, header, rows);
+  }
 
   return (
     <div className="wrap">
@@ -216,7 +240,10 @@ export default function TeacherSession({ id }) {
       </div>
 
       <div className="card">
-        <h3>全班名单状态（可手动改为：请假 / 迟到 / 缺勤 / 代签…）</h3>
+        <div className="row">
+          <h3 style={{ flex: 1 }}>全班名单状态（可手动改为：请假 / 迟到 / 缺勤 / 代签…）</h3>
+          <button className="btn" onClick={exportDetail}>⬇ 导出本次明细</button>
+        </div>
         <div className="hint" style={{ marginBottom: 8 }}>
           未在列表中出现过的同学默认「缺勤」。学委可直接在此修改状态，改动会立即保存到数据库。
         </div>

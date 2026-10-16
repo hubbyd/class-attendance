@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { navigate } from '../App.jsx';
 import { STATUS_LABEL } from '../flags.js';
+import { downloadCsv, stamp } from '../export.js';
 
 const fmt = (t) =>
   new Date(t).toLocaleString('zh-CN', {
@@ -40,15 +41,39 @@ export default function History({ classId }) {
   if (err) return <div className="wrap narrow"><div className="card" style={{ marginTop: 20 }}><div className="banner bad">{err}</div></div></div>;
   if (!data) return <div className="wrap narrow"><div className="card" style={{ marginTop: 20 }}>加载中…</div></div>;
 
+  // 导出「考勤总表」：行=全班学生，列=每次签到（时间/课程）+ 各状态次数统计
+  function exportMatrix() {
+    const asc = data.sessions.slice().sort((a, b) => a.startAt - b.startAt);
+    const header = [
+      '学号', '姓名',
+      ...asc.map((s) => `${fmt(s.startAt)} ${s.course || s.title}`),
+      '出勤', '迟到', '请假', '缺勤', '代签',
+    ];
+    const rows = data.students.map((stu) => {
+      const tally = { present: 0, late: 0, leave: 0, absent: 0, proxy: 0 };
+      const cells = asc.map((s) => {
+        const st = (s.statuses && s.statuses[stu.id]) || 'absent';
+        if (tally[st] !== undefined) tally[st] += 1;
+        return STATUS_LABEL[st] || st;
+      });
+      return [stu.studentNo, stu.name, ...cells, tally.present, tally.late, tally.leave, tally.absent, tally.proxy];
+    });
+    downloadCsv(`${data.className}-考勤总表-${stamp(Date.now())}.csv`, header, rows);
+  }
+
   return (
     <div className="wrap">
       <div className="card" style={{ marginTop: 16 }}>
         <div className="row">
           <h2 style={{ flex: 1 }}>签到历史 · {data.className}</h2>
+          <button className="btn primary" onClick={exportMatrix} disabled={!data.students.length}>
+            ⬇ 导出考勤总表（Excel/CSV）
+          </button>
           <button className="btn ghost" onClick={() => navigate('/teacher')}>返回学委端</button>
         </div>
         <div className="muted small" style={{ marginTop: 6 }}>
           共 {data.sessions.length} 次签到记录。每次签到的数据都已存入数据库，点击「查看明细」可修改状态。
+          免费实例重启/重部署会清空服务器数据，<b>建议每次考勤后点「导出考勤总表」把记录存到本地长期留存</b>。
         </div>
       </div>
 

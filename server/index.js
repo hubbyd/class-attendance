@@ -120,11 +120,13 @@ function sessionSummary(s) {
   const cls = classes.find((c) => c.id === s.classId);
   const counts = {};
   SUMMARY_STATUSES.forEach((k) => (counts[k] = 0));
+  const statuses = {};
   let total = 0;
   if (cls) {
     total = cls.studentIds.length;
     for (const sid of cls.studentIds) {
       const st = studentStatus(s, sid);
+      statuses[sid] = st;
       counts[st] = (counts[st] || 0) + 1;
     }
   }
@@ -140,6 +142,7 @@ function sessionSummary(s) {
     endAt: s.endAt,
     status: ended ? 'ended' : 'active',
     counts,
+    statuses,
     total,
   };
 }
@@ -247,7 +250,11 @@ const server = http.createServer(async (req, res) => {
         .filter((s) => s.classId === c.id)
         .sort((a, b) => b.startAt - a.startAt)
         .map(sessionSummary);
-      return send(res, 200, { classId: c.id, className: c.name, sessions: list });
+      const students = c.studentIds.map((sid) => {
+        const stu = STUDENTS.find((x) => x.id === sid);
+        return stu ? { id: stu.id, name: stu.name, studentNo: stu.studentNo } : { id: sid, name: sid, studentNo: '' };
+      });
+      return send(res, 200, { classId: c.id, className: c.name, students, sessions: list });
     }
 
     // 发起签到（创建场次）

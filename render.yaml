@@ -2,17 +2,9 @@ services:
   - type: web
     name: class-attendance
     runtime: docker
-    # 持久磁盘需付费实例；免费实例文件系统是临时的，重新部署会清空签到历史
-    plan: starter
+    plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
         value: production
-      # SQLite 数据目录指向持久磁盘挂载点，保证签到历史长期保存
-      - key: DATA_DIR
-        value: /var/data/attendance
-    disk:
-      name: attendance-data
-      mountPath: /var/data/attendance
-      sizeGB: 1
