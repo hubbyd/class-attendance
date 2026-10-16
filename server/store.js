@@ -135,6 +135,8 @@ export function rebuildSessionIndexes(session) {
   session.photoHashes = new Map();
   for (const r of session.records) {
     if (r.status === 'rejected') continue;
+    // 手动标记（请假/缺勤/代签等）没有设备指纹，跳过，避免污染设备占用表
+    if (!r.deviceFingerprint) continue;
     session.deviceMap.set(r.deviceFingerprint, r.studentId);
     if (r.photo) session.photoHashes.set(sha(r.photo), r.studentId);
     if (!deviceIndex.has(r.deviceFingerprint)) deviceIndex.set(r.deviceFingerprint, new Set());
@@ -197,6 +199,54 @@ export function persistRecord(sessionId, record) {
 
 export function persistRecordStatus(record) {
   updateRecordStatus(record.id, record.status, record.reviewedAt ?? null);
+}
+
+// 学委可手动设置的状态（用于请假、迟到、缺勤、代签等人工标记）
+export const MANUAL_STATUSES = ['present', 'late', 'leave', 'absent', 'proxy'];
+
+/**
+ * 手动设置某学生在一场签到中的状态。
+ * - 若该生已有记录（签到或人工），直接改写其状态；
+ * - 若没有记录，则补一条人工记录，保证该生的状态可被持久化与统计。
+ */
+export function setStudentStatus(sessionId, studentId, status) {
+  if (!MANUAL_STATUSES.includes(status)) throw new Error('不支持的状态');
+  const s = sessions.find((x) => x.id === sessionId);
+  if (!s) return null;
+  const stu = STUDENTS.find((x) => x.id === studentId);
+  if (!stu) return null;
+
+  let latest = null;
+  for (const r of s.records) {
+    if (r.studentId !== studentId) continue;
+    if (!latest || r.createdAt >= latest.createdAt) latest = r;
+  }
+  if (latest) {
+    latest.status = status;
+    latest.reviewedAt = now();
+    persistRecordStatus(latest);
+    return latest;
+  }
+
+  const rec = {
+    id: uid('r_'),
+    studentId,
+    name: stu.name,
+    studentNo: stu.studentNo,
+    checkinType: 'manual',
+    status,
+    flags: [],
+    distance: null,
+    location: null,
+    deviceFingerprint: null,
+    photo: null,
+    motionScore: null,
+    createdAt: now(),
+    reviewedAt: now(),
+  };
+  s.records.push(rec);
+  persistRecord(sessionId, rec);
+  return rec;
 }
 
 // 从 SQLite 启动时水化内存态

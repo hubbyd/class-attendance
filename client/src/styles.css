@@ -88,6 +88,9 @@ input:focus, select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rg
 .pill.flagged { background: #fef3c7; color: #b45309; }
 .pill.rejected { background: #fee2e2; color: #b91c1c; }
 .pill.absent { background: #e2e8f0; color: #475569; }
+.pill.late { background: #dbeafe; color: #1d4ed8; }
+.pill.leave { background: #ede9fe; color: #6d28d9; }
+.pill.proxy { background: #ffedd5; color: #c2410c; }
 
 .flag-tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #b91c1c; margin: 2px 4px 2px 0; }
 .flag-tag.soft { background: #fef3c7; color: #b45309; }

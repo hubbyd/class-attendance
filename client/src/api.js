@@ -32,4 +32,7 @@ export const api = {
   checkin: (id, b) => req(`/sessions/${id}/checkin`, { method: 'POST', body: JSON.stringify(b) }),
   review: (sid, rid, action) =>
     req(`/sessions/${sid}/records/${rid}/review`, { method: 'POST', body: JSON.stringify({ action }) }),
+  setStudentStatus: (sid, b) =>
+    req(`/sessions/${sid}/records/status`, { method: 'POST', body: JSON.stringify(b) }),
+  history: (cid) => req('/classes/' + cid + '/history'),
 };

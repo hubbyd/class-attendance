@@ -18,6 +18,7 @@ import {
   persistRecord,
   persistSessionStatus,
   persistRecordStatus,
+  setStudentStatus,
 } from './store.js';
 import { verify, review } from './anticheat.js';
 
@@ -110,6 +111,36 @@ function sessionDTO(s) {
     secondsToRotate: ended ? 0 : secondsToRotate(),
     records: s.records.map((r) => ({ ...r })),
     roster,
+  };
+}
+
+// 历史记录列表用的轻量摘要（不含照片等大字段），附带各项状态计数
+const SUMMARY_STATUSES = ['present', 'late', 'leave', 'absent', 'proxy', 'flagged', 'rejected'];
+function sessionSummary(s) {
+  const cls = classes.find((c) => c.id === s.classId);
+  const counts = {};
+  SUMMARY_STATUSES.forEach((k) => (counts[k] = 0));
+  let total = 0;
+  if (cls) {
+    total = cls.studentIds.length;
+    for (const sid of cls.studentIds) {
+      const st = studentStatus(s, sid);
+      counts[st] = (counts[st] || 0) + 1;
+    }
+  }
+  const ended = s.status !== 'active' || now() > s.endAt;
+  return {
+    id: s.id,
+    classId: s.classId,
+    title: s.title,
+    course: s.course || '',
+    building: s.building || '',
+    roomName: s.roomName,
+    startAt: s.startAt,
+    endAt: s.endAt,
+    status: ended ? 'ended' : 'active',
+    counts,
+    total,
   };
 }
 
@@ -206,6 +237,19 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { active: true, classId: c.id, session: sessionDTO(active) });
     }
 
+    // 班级签到历史（每次签到的记录与统计数据，仅学委可见）
+    mm = p.match(/^\/api\/classes\/([^/]+)\/history$/);
+    if (m === 'GET' && mm) {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
+      const c = classes.find((x) => x.id === mm[1]);
+      if (!c) return send(res, 404, { error: '班级不存在' });
+      const list = sessions
+        .filter((s) => s.classId === c.id)
+        .sort((a, b) => b.startAt - a.startAt)
+        .map(sessionSummary);
+      return send(res, 200, { classId: c.id, className: c.name, sessions: list });
+    }
+
     // 发起签到（创建场次）
     mm = p.match(/^\/api\/classes\/([^/]+)\/sessions$/);
     if (m === 'POST' && mm) {
@@ -283,6 +327,22 @@ const server = http.createServer(async (req, res) => {
       if (!r) return send(res, 404, { error: '记录不存在' });
       persistRecordStatus(r);
       return send(res, 200, { record: r });
+    }
+
+    // 学委手动设置某生状态（出勤/迟到/请假/缺勤/代签）
+    mm = p.match(/^\/api\/sessions\/([^/]+)\/records\/status$/);
+    if (m === 'POST' && mm) {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
+      const s = sessions.find((x) => x.id === mm[1]);
+      if (!s) return send(res, 404, { error: '签到场次不存在' });
+      const body = await readBody(req);
+      try {
+        const rec = setStudentStatus(s.id, body.studentId, body.status);
+        if (!rec) return send(res, 400, { error: '学生不存在' });
+        return send(res, 200, sessionDTO(s));
+      } catch (e) {
+        return send(res, 400, { error: e.message });
+      }
     }
 
     // 静态资源（若已构建 client/dist）

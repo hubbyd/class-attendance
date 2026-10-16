@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../api.js';
-import { FLAG_LABEL, SOFT_FLAGS, STATUS_LABEL } from '../flags.js';
+import { FLAG_LABEL, SOFT_FLAGS, STATUS_LABEL, MANUAL_STATUS_OPTIONS } from '../flags.js';
 
 const fmtTime = (t) => new Date(t).toLocaleTimeString('zh-CN', { hour12: false });
 
@@ -86,18 +86,27 @@ export default function TeacherSession({ id }) {
     }
   }
 
+  // 手动改某个学生的状态（请假 / 迟到 / 缺勤 / 代签等）
+  async function changeStatus(studentId, status) {
+    if (!status) return;
+    setErr('');
+    try {
+      await api.setStudentStatus(s.id, { studentId, status });
+      load();
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
   if (!s) return <div className="wrap narrow"><div className="card" style={{ marginTop: 20 }}>{err || '加载中…'}</div></div>;
 
   const remain = Math.max(0, s.endAt - tick);
   const mm = String(Math.floor(remain / 60000)).padStart(2, '0');
   const ss = String(Math.floor((remain % 60000) / 1000)).padStart(2, '0');
 
-  const byStudent = {};
-  s.records.forEach((r) => (byStudent[r.studentId] = r));
-  const present = s.roster.filter((r) => r.status === 'present').length;
-  const flagged = s.roster.filter((r) => r.status === 'flagged').length;
-  const rejected = s.roster.filter((r) => r.status === 'rejected').length;
-  const absent = s.roster.filter((r) => r.status === 'absent').length;
+  const counts = {};
+  Object.keys(STATUS_LABEL).forEach((k) => (counts[k] = 0));
+  s.roster.forEach((r) => (counts[r.status] = (counts[r.status] || 0) + 1));
 
   return (
     <div className="wrap">
@@ -150,10 +159,13 @@ export default function TeacherSession({ id }) {
           <div>
             <h3>实时统计</h3>
             <div className="grid c2">
-              <div className="stat"><b style={{ color: 'var(--ok)' }}>{present}</b><span>已签到</span></div>
-              <div className="stat"><b style={{ color: 'var(--warn)' }}>{flagged}</b><span>待复核</span></div>
-              <div className="stat"><b style={{ color: 'var(--bad)' }}>{rejected}</b><span>已拒绝</span></div>
-              <div className="stat"><b>{absent}</b><span>未签到</span></div>
+              <div className="stat"><b style={{ color: 'var(--ok)' }}>{counts.present}</b><span>出勤</span></div>
+              <div className="stat"><b style={{ color: '#1d4ed8' }}>{counts.late}</b><span>迟到</span></div>
+              <div className="stat"><b style={{ color: '#6d28d9' }}>{counts.leave}</b><span>请假</span></div>
+              <div className="stat"><b>{counts.absent}</b><span>缺勤</span></div>
+              <div className="stat"><b style={{ color: 'var(--warn)' }}>{counts.flagged}</b><span>待复核</span></div>
+              <div className="stat"><b style={{ color: 'var(--bad)' }}>{counts.rejected}</b><span>已拒绝</span></div>
+              <div className="stat"><b style={{ color: '#c2410c' }}>{counts.proxy}</b><span>代签</span></div>
             </div>
             <div className="row" style={{ marginTop: 14 }}>
               <button className="btn bad" onClick={endSession} disabled={s.status !== 'active'}>结束签到</button>
@@ -204,12 +216,34 @@ export default function TeacherSession({ id }) {
       </div>
 
       <div className="card">
-        <h3>全班名单状态</h3>
-        <div className="row">
-          {s.roster.map((r) => (
-            <span key={r.id} className={`pill ${r.status}`}>{r.name} · {STATUS_LABEL[r.status]}</span>
-          ))}
+        <h3>全班名单状态（可手动改为：请假 / 迟到 / 缺勤 / 代签…）</h3>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          未在列表中出现过的同学默认「缺勤」。学委可直接在此修改状态，改动会立即保存到数据库。
         </div>
+        <table>
+          <thead>
+            <tr>
+              <th>学号</th><th>姓名</th><th>当前状态</th><th>手动改为</th>
+            </tr>
+          </thead>
+          <tbody>
+            {s.roster.map((r) => (
+              <tr key={r.id}>
+                <td className="mono small">{r.studentNo}</td>
+                <td><b>{r.name}</b></td>
+                <td><span className={`pill ${r.status}`}>{STATUS_LABEL[r.status] || r.status}</span></td>
+                <td>
+                  <select value="" onChange={(e) => changeStatus(r.id, e.target.value)}>
+                    <option value="">— 选择 —</option>
+                    {MANUAL_STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {reviewing && (

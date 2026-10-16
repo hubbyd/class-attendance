@@ -15,8 +15,20 @@ export const FLAG_LABEL = {
 export const SOFT_FLAGS = ['GEO_LOW_ACCURACY', 'GEO_MOCK_SUSPECT'];
 
 export const STATUS_LABEL = {
-  present: '已签到',
+  present: '出勤',
+  late: '迟到',
+  leave: '请假',
+  absent: '缺勤',
+  proxy: '代签',
   flagged: '待复核',
   rejected: '已拒绝',
-  absent: '未签到',
 };
+
+// 学委可手动设置的状态（用于请假、迟到、缺勤、代签等人工标记）
+export const MANUAL_STATUS_OPTIONS = [
+  { value: 'present', label: '出勤' },
+  { value: 'late', label: '迟到' },
+  { value: 'leave', label: '请假' },
+  { value: 'absent', label: '缺勤' },
+  { value: 'proxy', label: '代签' },
+];

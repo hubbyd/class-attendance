@@ -3,6 +3,7 @@ import Home from './pages/Home.jsx';
 import Teacher from './pages/Teacher.jsx';
 import TeacherSession from './pages/TeacherSession.jsx';
 import Student from './pages/Student.jsx';
+import History from './pages/History.jsx';
 import { api, savedTeacherCode } from './api.js';
 
 export function navigate(to) {
@@ -109,6 +110,12 @@ export default function App() {
     page = (
       <TeacherGate>
         <TeacherSession id={route.params.get('id')} />
+      </TeacherGate>
+    );
+  else if (route.path.startsWith('/history'))
+    page = (
+      <TeacherGate>
+        <History classId={route.params.get('class')} />
       </TeacherGate>
     );
   else if (isStudent) page = <Student sid={route.params.get('sid')} classId={route.params.get('class')} />;

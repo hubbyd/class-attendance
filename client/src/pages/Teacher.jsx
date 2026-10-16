@@ -288,9 +288,12 @@ export default function Teacher() {
               </div>
             </div>
 
-            <div style={{ marginTop: 14 }}>
-              <button className="btn primary block" onClick={() => openStart(c)}>
+            <div className="row" style={{ marginTop: 14 }}>
+              <button className="btn primary" onClick={() => openStart(c)} style={{ flex: 2 }}>
                 ▶ 发起本次签到（按当天课程）
+              </button>
+              <button className="btn" onClick={() => navigate('/history?class=' + c.id)} style={{ flex: 1 }}>
+                📜 历史记录
               </button>
             </div>
           </div>
