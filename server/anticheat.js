@@ -6,7 +6,6 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
 export const FLAGS = {
   SESSION_CLOSED: 'SESSION_CLOSED',
-  ALREADY_CHECKED: 'ALREADY_CHECKED',
   PASSCODE_INVALID: 'PASSCODE_INVALID',
   DEVICE_REUSE: 'DEVICE_REUSE',
   NO_LOCATION: 'NO_LOCATION',
@@ -25,7 +24,6 @@ export const FLAGS = {
 // 硬性拒绝：直接判为 rejected，不可计入出勤
 const HARD = new Set([
   FLAGS.SESSION_CLOSED,
-  FLAGS.ALREADY_CHECKED,
   FLAGS.PASSCODE_INVALID,
   FLAGS.DEVICE_REUSE,
   FLAGS.NO_LOCATION,
@@ -50,17 +48,19 @@ const MOTION_THRESHOLD = 0.01;
  * @returns {{ record: object, distance: number|null }}
  */
 export function verify(session, p) {
-  const flags = [];
   const t = now();
 
-  // 1) 场次有效性
-  if (session.status !== 'active' || t > session.endAt) flags.push(FLAGS.SESSION_CLOSED);
-
-  // 2) 重复签到（仅 present/flagged 视为已占位，rejected 可重试）
+  // 1) 重复签到：已出勤（present）或已提交待复核（flagged）的学生不再接受二次提交，
+  //    直接返回已有记录，不产生新记录（避免把已签到学生冲成“已拒绝”）
   const prev = session.records.find(
     (r) => r.studentId === p.studentId && (r.status === 'present' || r.status === 'flagged'),
   );
-  if (prev) flags.push(FLAGS.ALREADY_CHECKED);
+  if (prev) return { already: true, record: prev, distance: prev.distance ?? null };
+
+  const flags = [];
+
+  // 2) 场次有效性
+  if (session.status !== 'active' || t > session.endAt) flags.push(FLAGS.SESSION_CLOSED);
 
   // 3) 动态口令（防口令外泄、群内转发）
   if (!checkPasscode(session, p.passcode, t)) flags.push(FLAGS.PASSCODE_INVALID);

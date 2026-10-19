@@ -72,11 +72,12 @@ a { color: var(--brand); }
 
 label.field { display: block; margin-bottom: 12px; }
 label.field span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
-input, select {
+input, select, textarea {
   width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
   font-size: 14px; background: #fff; color: var(--text); outline: none;
 }
-input:focus, select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+textarea { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; resize: vertical; }
 
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); }

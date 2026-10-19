@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../api.js';
 import { navigate } from '../App.jsx';
+import { normalizeRoster, normalizeTimetable, readTable, textToRows } from '../import.js';
 
 const WEEKDAY = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
 
@@ -40,6 +41,34 @@ export default function Teacher() {
   const [tt, setTt] = useState(null);
   const [locating, setLocating] = useState(false);
   const [locMsg, setLocMsg] = useState('');
+  // 新建班级时的导入：人员名册 + 班级课表（粘贴文本 或 上传 Excel/CSV）
+  const [rosterText, setRosterText] = useState('');
+  const [timetableText, setTimetableText] = useState('');
+  const [rosterRows, setRosterRows] = useState([]);
+  const [timetableRows, setTimetableRows] = useState([]);
+
+  const parsedRoster = useMemo(
+    () => normalizeRoster([...rosterRows, ...textToRows(rosterText)]),
+    [rosterRows, rosterText],
+  );
+  const parsedTimetable = useMemo(
+    () => normalizeTimetable([...timetableRows, ...textToRows(timetableText)]),
+    [timetableRows, timetableText],
+  );
+
+  async function pickFile(e, kind) {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    setErr('');
+    try {
+      const rows = await readTable(f);
+      if (kind === 'roster') setRosterRows(rows);
+      else setTimetableRows(rows);
+    } catch {
+      setErr(`无法解析文件「${f.name}」，请使用 Excel(.xlsx/.xls)、CSV 或 TXT。`);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -72,6 +101,10 @@ export default function Teacher() {
 
   async function createClass() {
     setErr('');
+    if (!parsedRoster.length) {
+      setErr('请先导入班级人员（每行「学号 姓名」，或上传 Excel/CSV），至少 1 人。');
+      return;
+    }
     try {
       await api.createClass({
         name: form.name,
@@ -79,9 +112,29 @@ export default function Teacher() {
         lat: Number(form.lat),
         lng: Number(form.lng),
         radiusMeters: Number(form.radiusMeters),
+        students: parsedRoster,
+        timetable: parsedTimetable,
       });
       setShowNew(false);
       setForm({ ...form, name: '', roomName: '' });
+      setRosterText('');
+      setTimetableText('');
+      setRosterRows([]);
+      setTimetableRows([]);
+      load();
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function removeClass(c) {
+    setErr('');
+    const yes = window.confirm(
+      `确定删除班级「${c.name}」吗？\n\n该班级的全部签到场次、名单与签到历史记录都会被一并删除，且无法恢复。`,
+    );
+    if (!yes) return;
+    try {
+      await api.deleteClass(c.id);
       load();
     } catch (e) {
       setErr(e.message);
@@ -114,9 +167,9 @@ export default function Teacher() {
         navigate('/session?id=' + a.session.id);
         return;
       }
-      const t = await api.timetable();
+      const t = await api.timetable(c.id);
       const { weekday, today, current } = matchNow(t.timetable, t.sections);
-      setTt({ weekday, today, current, buildingPresets: t.buildingPresets });
+      setTt({ weekday, today, current, buildingPresets: t.buildingPresets, total: t.timetable.length });
       setStartForm({
         selIdx: current ? today.indexOf(current) : -1,
         course: current ? current.course : '',
@@ -226,32 +279,108 @@ export default function Teacher() {
         </div>
 
         {showNew && (
-          <div className="grid c2" style={{ marginTop: 14 }}>
-            <label className="field">
-              <span>班级名称</span>
-              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：软件工程 2023-1 班" />
-            </label>
-            <label className="field">
-              <span>教室名称</span>
-              <input value={form.roomName} onChange={(e) => setForm({ ...form, roomName: e.target.value })} placeholder="如：教学楼 A-302" />
-            </label>
-            <label className="field">
-              <span>围栏中心纬度 (lat)</span>
-              <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
-            </label>
-            <label className="field">
-              <span>围栏中心经度 (lng)</span>
-              <input value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
-            </label>
-            <label className="field">
-              <span>围栏半径（米）</span>
-              <input value={form.radiusMeters} onChange={(e) => setForm({ ...form, radiusMeters: e.target.value })} />
-            </label>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn primary block" onClick={createClass} disabled={!form.name || !form.roomName}>
-                保存班级
-              </button>
+          <div style={{ marginTop: 14 }}>
+            <div className="grid c2">
+              <label className="field">
+                <span>班级名称</span>
+                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：软件工程 2023-1 班" />
+              </label>
+              <label className="field">
+                <span>教室名称</span>
+                <input value={form.roomName} onChange={(e) => setForm({ ...form, roomName: e.target.value })} placeholder="如：教学楼 A-302" />
+              </label>
+              <label className="field">
+                <span>围栏中心纬度 (lat)</span>
+                <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
+              </label>
+              <label className="field">
+                <span>围栏中心经度 (lng)</span>
+                <input value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
+              </label>
+              <label className="field">
+                <span>围栏半径（米）</span>
+                <input value={form.radiusMeters} onChange={(e) => setForm({ ...form, radiusMeters: e.target.value })} />
+              </label>
             </div>
+
+            {/* ① 班级人员导入 */}
+            <div className="card" style={{ marginTop: 4, background: '#f8fafc' }}>
+              <div className="row">
+                <b style={{ flex: 1 }}>① 导入班级人员（必填）</b>
+                <label className="btn sm" style={{ cursor: 'pointer' }}>
+                  📄 上传 Excel / CSV
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.txt"
+                    style={{ display: 'none' }}
+                    onChange={(e) => pickFile(e, 'roster')}
+                  />
+                </label>
+              </div>
+              <div className="hint" style={{ margin: '6px 0 8px' }}>
+                每行一条：<span className="mono">学号,姓名</span>（逗号、空格或制表符分隔均可；可直接从 Excel 复制粘贴）
+              </div>
+              <textarea
+                rows={5}
+                value={rosterText}
+                onChange={(e) => setRosterText(e.target.value)}
+                placeholder={'2431081147,许东宁\n2431211144,刘思甜'}
+              />
+              {parsedRoster.length > 0 ? (
+                <div className="banner ok" style={{ marginTop: 8 }}>
+                  已识别 <b>{parsedRoster.length}</b> 人：{parsedRoster.slice(0, 4).map((s) => s.name).join('、')}
+                  {parsedRoster.length > 4 ? ' 等' : ''}
+                </div>
+              ) : (
+                <div className="hint" style={{ marginTop: 8 }}>尚未识别到学生，请粘贴或上传名册。</div>
+              )}
+            </div>
+
+            {/* ② 班级课表导入 */}
+            <div className="card" style={{ marginTop: 12, background: '#f8fafc' }}>
+              <div className="row">
+                <b style={{ flex: 1 }}>② 导入班级课表（选填）</b>
+                <label className="btn sm" style={{ cursor: 'pointer' }}>
+                  📄 上传 Excel / CSV
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.txt"
+                    style={{ display: 'none' }}
+                    onChange={(e) => pickFile(e, 'timetable')}
+                  />
+                </label>
+              </div>
+              <div className="hint" style={{ margin: '6px 0 8px' }}>
+                每行一条：<span className="mono">星期,节次,课程,教室,教师</span>（节次填 1-2 / 3-4 / 5-6 / 7-8）。
+                导入后，发起签到时会自动按当天课程带出教室。
+              </div>
+              <textarea
+                rows={5}
+                value={timetableText}
+                onChange={(e) => setTimetableText(e.target.value)}
+                placeholder={'周三,1-2,操作系统,2号教学楼403,李建廷\n周五,7-8,软件工程,实验楼402,史西兵'}
+              />
+              {parsedTimetable.length > 0 ? (
+                <div className="banner ok" style={{ marginTop: 8 }}>
+                  已识别 <b>{parsedTimetable.length}</b> 节课：
+                  {parsedTimetable.slice(0, 2).map((x) => `${WEEKDAY[x.day]}第${x.section}节《${x.course}》`).join('、')}
+                  {parsedTimetable.length > 2 ? ' 等' : ''}
+                </div>
+              ) : (
+                <div className="hint" style={{ marginTop: 8 }}>
+                  未导入课表也可以建班，之后发起签到时手动填写课程与教室即可。
+                </div>
+              )}
+            </div>
+
+            <button
+              className="btn primary block"
+              style={{ marginTop: 14 }}
+              onClick={createClass}
+              disabled={!form.name || !form.roomName}
+            >
+              保存班级
+            </button>
           </div>
         )}
       </div>
@@ -261,7 +390,7 @@ export default function Teacher() {
           <div className="card" key={c.id}>
             <h2>{c.name}</h2>
             <div className="muted small" style={{ marginTop: 4 }}>
-              🏫 {c.roomName} · 围栏半径 {c.radiusMeters}m · 学生 {c.studentCount} 人
+              🏫 {c.roomName} · 围栏半径 {c.radiusMeters}m · 学生 {c.studentCount} 人 · 课表 {c.timetableCount} 条
             </div>
 
             <div className="hint" style={{ marginTop: 14, fontWeight: 700, color: 'var(--brand)' }}>
@@ -296,6 +425,11 @@ export default function Teacher() {
                 📜 历史记录
               </button>
             </div>
+            <div className="row" style={{ marginTop: 10, justifyContent: 'flex-end' }}>
+              <button className="btn ghost sm" onClick={() => removeClass(c)}>
+                🗑 删除班级
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -309,6 +443,10 @@ export default function Teacher() {
               <div className="banner ok">
                 按当前时间自动匹配：{WEEKDAY[tt.weekday]} 第 {tt.current.section} 节《{tt.current.course}》
                 · {tt.current.room} · {tt.current.teacher}
+              </div>
+            ) : tt && tt.total === 0 ? (
+              <div className="banner warn">
+                该班级尚未导入课表，可直接在下方手动填写课程与教室，然后发起签到。
               </div>
             ) : (
               <div className="banner warn">

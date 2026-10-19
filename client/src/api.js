@@ -21,9 +21,10 @@ async function req(path, opts = {}) {
 
 export const api = {
   bootstrap: () => req('/bootstrap'),
-  timetable: () => req('/timetable'),
+  timetable: (classId) => req('/timetable' + (classId ? '?class=' + encodeURIComponent(classId) : '')),
   teacherVerify: (code) => req('/teacher/verify', { method: 'POST', body: JSON.stringify({ code }) }),
   createClass: (b) => req('/classes', { method: 'POST', body: JSON.stringify(b) }),
+  deleteClass: (id) => req('/classes/' + id, { method: 'DELETE' }),
   classDetail: (id) => req('/classes/' + id),
   activeSession: (cid) => req('/classes/' + cid + '/active'),
   createSession: (cid, b) => req(`/classes/${cid}/sessions`, { method: 'POST', body: JSON.stringify(b) }),

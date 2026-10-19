@@ -58,6 +58,12 @@ CREATE INDEX IF NOT EXISTS idx_sessions_class ON sessions(classId);
   if (!cols.includes('building')) db.exec('ALTER TABLE sessions ADD COLUMN building TEXT');
 }
 
+// 兼容旧库：为 classes 增补课表字段（JSON 文本，幂等）
+{
+  const cols = db.prepare('PRAGMA table_info(classes)').all().map((c) => c.name);
+  if (!cols.includes('timetable')) db.exec('ALTER TABLE classes ADD COLUMN timetable TEXT');
+}
+
 export { db };
 
 /* ---------------- students ---------------- */
@@ -75,9 +81,9 @@ export function allStudents() {
 
 export function insertClass(c) {
   db.prepare(
-    `INSERT INTO classes (id, name, roomName, lat, lng, radiusMeters, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(c.id, c.name, c.roomName, c.lat, c.lng, c.radiusMeters, c.createdAt);
+    `INSERT INTO classes (id, name, roomName, lat, lng, radiusMeters, createdAt, timetable)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(c.id, c.name, c.roomName, c.lat, c.lng, c.radiusMeters, c.createdAt, JSON.stringify(c.timetable || []));
   const cs = db.prepare('INSERT INTO class_students (classId, studentId) VALUES (?, ?)');
   c.studentIds.forEach((sid) => cs.run(c.id, sid));
 }
@@ -85,7 +91,21 @@ export function insertClass(c) {
 export function allClasses() {
   const classes = db.prepare('SELECT * FROM classes ORDER BY createdAt').all();
   const cs = db.prepare('SELECT studentId FROM class_students WHERE classId = ?');
-  return classes.map((c) => ({ ...c, studentIds: cs.all(c.id).map((r) => r.studentId) }));
+  return classes.map((c) => ({
+    ...c,
+    timetable: c.timetable ? JSON.parse(c.timetable) : [],
+    studentIds: cs.all(c.id).map((r) => r.studentId),
+  }));
+}
+
+// 删除班级及其全部签到场次与记录（学生主表保留，可能同时属于其他班级）
+export function deleteClass(id) {
+  const sids = db.prepare('SELECT id FROM sessions WHERE classId = ?').all(id).map((r) => r.id);
+  const delRec = db.prepare('DELETE FROM records WHERE sessionId = ?');
+  sids.forEach((sid) => delRec.run(sid));
+  db.prepare('DELETE FROM sessions WHERE classId = ?').run(id);
+  db.prepare('DELETE FROM class_students WHERE classId = ?').run(id);
+  db.prepare('DELETE FROM classes WHERE id = ?').run(id);
 }
 
 /* ---------------- sessions ---------------- */

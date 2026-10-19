@@ -1,6 +1,5 @@
 export const FLAG_LABEL = {
   SESSION_CLOSED: '签到已结束',
-  ALREADY_CHECKED: '已签到，重复提交',
   PASSCODE_INVALID: '口令错误或已过期',
   DEVICE_REUSE: '同一设备为他人代签',
   NO_LOCATION: '未获取到定位',

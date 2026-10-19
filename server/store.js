@@ -4,6 +4,7 @@ import {
   allStudents,
   allClasses,
   insertClass,
+  deleteClass as deleteClassRow,
   allSessions,
   insertSession,
   updateSessionStatus,
@@ -17,8 +18,9 @@ export const uid = (p = 'id_') => p + crypto.randomBytes(6).toString('hex');
 // 动态口令/二维码轮换周期（毫秒）
 export const PASSCODE_PERIOD_MS = 15000;
 
-// 软件2402班学生名册（学号 + 姓名；不含手机号等隐私信息）
-export const STUDENTS = [
+// 软件2402班初始名册（学号 + 姓名；不含手机号等隐私信息）
+// 仅用于首次启动时播种演示班级；其他班级的名册由学委导入
+export const SEED_ROSTER = [
   { id: 's2431081147', name: '许东宁', studentNo: '2431081147' },
   { id: 's2431211144', name: '刘思甜', studentNo: '2431211144' },
   { id: 's2431241108', name: '郝钰东', studentNo: '2431241108' },
@@ -72,7 +74,7 @@ export const STUDENTS = [
 ];
 
 // 软件2402班课程表（来自班级课表；day: 1=周一…7=周日）
-// 用于「按当天课程」自动带出本节次的上课教室
+// 用作演示班级的初始课表；其他班级的课表由学委在新建班级时导入
 export const TIMETABLE = [
   { day: 3, section: '1-2', course: '操作系统', room: '2号教学楼403', building: '2号教学楼', teacher: '李建廷', weeks: '1-15周(单)' },
   { day: 4, section: '1-2', course: '互联网+创业', room: '1号教学楼101', building: '1号教学楼', teacher: '谢晶', weeks: '1-16周' },
@@ -98,10 +100,49 @@ export const SECTION_TIMES = {
 };
 
 // 内存态（启动时从 SQLite 水化）
+export const STUDENTS = []; // 全局学生注册表：启动时水化 + 导入班级人员时追加
 export const classes = [];
 export const sessions = [];
 // 全局设备指纹索引：deviceId -> Set(studentId)，跨场次识别“同设备多签到”
 export const deviceIndex = new Map();
+
+const studentMap = new Map(); // id -> student，加速查找
+
+// 由学号派生稳定的学生 id：同一个人在多个班级中共用同一条学生记录
+export const studentIdOf = (studentNo) => 's' + String(studentNo).trim();
+
+export function studentById(id) {
+  return studentMap.get(id) || null;
+}
+
+/**
+ * 登记一批学生（导入班级人员时调用）：写入学生主表并加入全局注册表。
+ * 已存在的学号保留原有姓名，避免覆盖其他班级已录入的信息。
+ */
+export function addStudents(list) {
+  const fresh = [];
+  for (const it of list || []) {
+    const studentNo = String(it.studentNo || '').trim();
+    const name = String(it.name || '').trim();
+    if (!studentNo || !name) continue;
+    const id = studentIdOf(studentNo);
+    if (studentMap.has(id)) continue;
+    const stu = { id, name, studentNo };
+    fresh.push(stu);
+    STUDENTS.push(stu);
+    studentMap.set(id, stu);
+  }
+  if (fresh.length) ensureStudents(fresh);
+  // 返回本次导入班级所需的全量 id（含此前已存在的）
+  return (list || [])
+    .map((it) => studentIdOf(String(it.studentNo || '').trim()))
+    .filter((id) => studentMap.has(id));
+}
+
+export function getTimetable(classId) {
+  const c = classes.find((x) => x.id === classId);
+  return c && Array.isArray(c.timetable) ? c.timetable : [];
+}
 
 const newSecret = () => crypto.randomBytes(16);
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -145,6 +186,15 @@ export function rebuildSessionIndexes(session) {
 }
 
 export function createClass(input) {
+  // 支持两种入参：students（导入的 {studentNo,name} 列表，自动登记学生）或 studentIds（已存在的 id）
+  let studentIds = [];
+  if (Array.isArray(input.students) && input.students.length) {
+    studentIds = addStudents(input.students);
+  } else if (Array.isArray(input.studentIds)) {
+    studentIds = input.studentIds.filter((id) => studentById(id));
+  }
+  studentIds = [...new Set(studentIds)];
+
   const cls = {
     id: input.id || uid('c_'),
     name: input.name,
@@ -152,12 +202,25 @@ export function createClass(input) {
     lat: Number(input.lat),
     lng: Number(input.lng),
     radiusMeters: Number(input.radiusMeters) || 100,
-    studentIds: input.studentIds && input.studentIds.length ? input.studentIds : STUDENTS.map((s) => s.id),
+    timetable: Array.isArray(input.timetable) ? input.timetable : [],
+    studentIds,
     createdAt: now(),
   };
   insertClass(cls);
   classes.push(cls);
   return cls;
+}
+
+// 删除班级：连同其全部签到场次与记录一起删除（学生主表保留）
+export function deleteClass(classId) {
+  const i = classes.findIndex((c) => c.id === classId);
+  if (i < 0) return false;
+  for (let j = sessions.length - 1; j >= 0; j--) {
+    if (sessions[j].classId === classId) sessions.splice(j, 1);
+  }
+  deleteClassRow(classId);
+  classes.splice(i, 1);
+  return true;
 }
 
 export function createSession(classId, input = {}) {
@@ -213,7 +276,7 @@ export function setStudentStatus(sessionId, studentId, status) {
   if (!MANUAL_STATUSES.includes(status)) throw new Error('不支持的状态');
   const s = sessions.find((x) => x.id === sessionId);
   if (!s) return null;
-  const stu = STUDENTS.find((x) => x.id === studentId);
+  const stu = studentById(studentId);
   if (!stu) return null;
 
   let latest = null;
@@ -251,7 +314,11 @@ export function setStudentStatus(sessionId, studentId, status) {
 
 // 从 SQLite 启动时水化内存态
 export function hydrate() {
-  ensureStudents(STUDENTS);
+  ensureStudents(SEED_ROSTER);
+  for (const s of allStudents()) {
+    STUDENTS.push(s);
+    studentMap.set(s.id, s);
+  }
   classes.push(...allClasses());
   sessions.push(...allSessions());
   for (const s of sessions) rebuildSessionIndexes(s);
@@ -271,6 +338,8 @@ export function seed() {
       // 课表涉及 1号教学楼 / 2号教学楼 / 实验楼 等多个楼宇，
       // 故围栏覆盖整个校区核心区（可按需收窄）
       radiusMeters: 800,
+      timetable: TIMETABLE,
+      students: SEED_ROSTER.map((s) => ({ name: s.name, studentNo: s.studentNo })),
     });
   }
   return classes[0];

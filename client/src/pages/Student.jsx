@@ -166,6 +166,9 @@ export default function Student({ sid, classId }) {
   }
 
   const bannerClass = result?.status === 'present' ? 'ok' : result?.status === 'flagged' ? 'warn' : 'bad';
+  // 已签到 / 已提交待复核的同学：不允许再次提交（服务端同样会拒绝）
+  const mine = s.roster.find((r) => r.id === studentId);
+  const blocked = mine && (mine.status === 'present' || mine.status === 'flagged');
 
   return (
     <div className="wrap narrow">
@@ -204,12 +207,18 @@ export default function Student({ sid, classId }) {
         <select style={{ marginTop: 8 }} value={studentId} onChange={(e) => setStudentId(e.target.value)}>
           <option value="">请选择你的名字…</option>
           {s.roster.map((r) => (
-            <option key={r.id} value={r.id} disabled={r.status === 'present'}>
-              {r.name}（{r.studentNo}）{r.status === 'present' ? ' · 已签到' : ''}
+            <option
+              key={r.id}
+              value={r.id}
+              disabled={r.status === 'present' || r.status === 'flagged'}
+            >
+              {r.name}（{r.studentNo}）
+              {r.status === 'present' ? ' · 已签到' : r.status === 'flagged' ? ' · 待复核' : ''}
             </option>
           ))}
         </select>
         <div className="hint" style={{ marginTop: 6 }}>
+          已签到的同学不能重复签到（名字会自动置灰）。
           设备指纹：<span className="mono">{fp.current}</span>（同一设备替他人签到会被拦截）
         </div>
       </div>
@@ -270,8 +279,15 @@ export default function Student({ sid, classId }) {
       )}
 
       <div className="card">
-        <button className="btn primary block" onClick={submit} disabled={submitting || s.status !== 'active'}>
-          {submitting ? '提交中…' : '提交签到'}
+        {blocked && (
+          <div className={`banner ${mine.status === 'present' ? 'ok' : 'warn'}`} style={{ marginBottom: 10 }}>
+            {mine.status === 'present'
+              ? `✅ ${mine.name} 本场已签到，无需重复签到。`
+              : `⚠️ ${mine.name} 已提交，正在等待学委复核。`}
+          </div>
+        )}
+        <button className="btn primary block" onClick={submit} disabled={submitting || s.status !== 'active' || blocked}>
+          {submitting ? '提交中…' : blocked ? '你已签到' : '提交签到'}
         </button>
         <div className="hint" style={{ marginTop: 8, textAlign: 'center' }}>
           提交时会同时校验：定位围栏 · 设备指纹 · 当前口令（自动带入）
