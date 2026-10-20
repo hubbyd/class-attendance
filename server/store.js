@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import {
   ensureStudents,
+  insertStudentsFull,
+  clearAll,
   allStudents,
   allClasses,
   insertClass,
@@ -15,6 +17,13 @@ import {
 
 export const now = () => Date.now();
 export const uid = (p = 'id_') => p + crypto.randomBytes(6).toString('hex');
+
+// 数据版本号：任何写操作后自增。学委端据此判断本地备份是否过期（免费云部署重启会清库）
+let revision = 0;
+export const getRevision = () => revision;
+const touch = () => {
+  revision += 1;
+};
 
 // 动态口令/二维码轮换周期（毫秒）
 export const PASSCODE_PERIOD_MS = 15000;
@@ -157,6 +166,7 @@ export function setStudentFace(studentId, descriptor) {
   if (!s) return null;
   s.faceDescriptor = Array.isArray(descriptor) && descriptor.length ? descriptor : null;
   setFaceDescriptorRow(studentId, s.faceDescriptor);
+  touch();
   return s;
 }
 
@@ -224,6 +234,7 @@ export function createClass(input) {
   };
   insertClass(cls);
   classes.push(cls);
+  touch();
   return cls;
 }
 
@@ -236,6 +247,7 @@ export function deleteClass(classId) {
   }
   deleteClassRow(classId);
   classes.splice(i, 1);
+  touch();
   return true;
 }
 
@@ -264,20 +276,24 @@ export function createSession(classId, input = {}) {
   };
   insertSession(s);
   sessions.push(s);
+  touch();
   return s;
 }
 
 export function persistSessionStatus(session) {
   updateSessionStatus(session.id, session.status, session.endAt);
+  touch();
 }
 
 // 签到记录落库（含 sessionId）
 export function persistRecord(sessionId, record) {
   insertRecord({ ...record, sessionId });
+  touch();
 }
 
 export function persistRecordStatus(record) {
   updateRecordStatus(record.id, record.status, record.reviewedAt ?? null);
+  touch();
 }
 
 // 学委可手动设置的状态（用于请假、迟到、缺勤、代签等人工标记）
@@ -328,9 +344,8 @@ export function setStudentStatus(sessionId, studentId, status) {
   return rec;
 }
 
-// 从 SQLite 启动时水化内存态
-export function hydrate() {
-  ensureStudents(SEED_ROSTER);
+// 从 SQLite 读取并填充内存态
+function populate() {
   for (const s of allStudents()) {
     STUDENTS.push(s);
     studentMap.set(s.id, s);
@@ -338,6 +353,156 @@ export function hydrate() {
   classes.push(...allClasses());
   sessions.push(...allSessions());
   for (const s of sessions) rebuildSessionIndexes(s);
+}
+
+export function hydrate() {
+  ensureStudents(SEED_ROSTER);
+  populate();
+}
+
+// 清空内存态后重新水化（从备份整库恢复后调用）
+export function reloadFromDb() {
+  STUDENTS.length = 0;
+  studentMap.clear();
+  classes.length = 0;
+  sessions.length = 0;
+  deviceIndex.clear();
+  populate();
+}
+
+// 导出全量数据（班级/课表/名册/场次/记录/人脸底照），供学委端在本机留一份备份
+export function exportState() {
+  return {
+    version: 1,
+    exportedAt: now(),
+    rev: revision,
+    students: STUDENTS.map((s) => ({
+      id: s.id,
+      name: s.name,
+      studentNo: s.studentNo,
+      faceDescriptor: s.faceDescriptor || null,
+    })),
+    classes: classes.map((c) => ({
+      id: c.id,
+      name: c.name,
+      roomName: c.roomName,
+      lat: c.lat,
+      lng: c.lng,
+      radiusMeters: c.radiusMeters,
+      createdAt: c.createdAt,
+      timetable: c.timetable || [],
+      studentIds: [...c.studentIds],
+    })),
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      classId: s.classId,
+      title: s.title,
+      course: s.course || '',
+      building: s.building || '',
+      roomName: s.roomName,
+      center: { lat: s.center.lat, lng: s.center.lng },
+      radiusMeters: s.radiusMeters,
+      startAt: s.startAt,
+      endAt: s.endAt,
+      status: s.status,
+      secret: Buffer.from(s.secret).toString('hex'),
+      records: s.records.map((r) => ({
+        id: r.id,
+        studentId: r.studentId,
+        name: r.name,
+        studentNo: r.studentNo,
+        checkinType: r.checkinType,
+        status: r.status,
+        flags: r.flags || [],
+        distance: r.distance ?? null,
+        location: r.location || null,
+        deviceFingerprint: r.deviceFingerprint || null,
+        photo: r.photo || null,
+        motionScore: r.motionScore ?? null,
+        faceDistance: r.faceDistance ?? null,
+        createdAt: r.createdAt,
+        reviewedAt: r.reviewedAt ?? null,
+      })),
+    })),
+  };
+}
+
+/**
+ * 从备份整库恢复：清空现有数据后按备份重建（含班级、课表、名册、场次、记录、人脸底照）。
+ * 用于免费云部署重启清库后，把学委本机的备份一键放回服务端。
+ */
+export function importState(state) {
+  if (!state || typeof state !== 'object') throw new Error('备份数据无效');
+  const stus = Array.isArray(state.students) ? state.students : [];
+  const cls = Array.isArray(state.classes) ? state.classes : [];
+  const sess = Array.isArray(state.sessions) ? state.sessions : [];
+  if (!cls.length && !sess.length) throw new Error('备份内容为空，未执行恢复');
+
+  clearAll();
+
+  insertStudentsFull(
+    stus.map((s) => ({
+      id: String(s.id),
+      name: String(s.name || ''),
+      studentNo: String(s.studentNo || ''),
+      faceDescriptor: Array.isArray(s.faceDescriptor) && s.faceDescriptor.length ? s.faceDescriptor : null,
+    })),
+  );
+
+  for (const c of cls) {
+    insertClass({
+      id: String(c.id),
+      name: String(c.name || ''),
+      roomName: String(c.roomName || ''),
+      lat: Number(c.lat),
+      lng: Number(c.lng),
+      radiusMeters: Number(c.radiusMeters) || 100,
+      createdAt: Number(c.createdAt) || now(),
+      timetable: Array.isArray(c.timetable) ? c.timetable : [],
+      studentIds: Array.isArray(c.studentIds) ? c.studentIds.map(String) : [],
+    });
+  }
+
+  for (const s of sess) {
+    insertSession({
+      id: String(s.id),
+      classId: String(s.classId),
+      title: String(s.title || '课堂签到'),
+      course: s.course || '',
+      building: s.building || '',
+      roomName: s.roomName,
+      center: { lat: Number(s.center && s.center.lat), lng: Number(s.center && s.center.lng) },
+      radiusMeters: Number(s.radiusMeters) || 100,
+      startAt: Number(s.startAt) || now(),
+      endAt: Number(s.endAt) || now(),
+      status: s.status === 'ended' ? 'ended' : 'active',
+      secret: Buffer.from(String(s.secret || ''), 'hex'),
+    });
+    for (const r of s.records || []) {
+      insertRecord({
+        id: String(r.id),
+        sessionId: String(s.id),
+        studentId: String(r.studentId),
+        name: String(r.name || ''),
+        studentNo: String(r.studentNo || ''),
+        checkinType: r.checkinType || 'photo',
+        status: r.status || 'absent',
+        flags: Array.isArray(r.flags) ? r.flags : [],
+        distance: r.distance ?? null,
+        location: r.location || null,
+        deviceFingerprint: r.deviceFingerprint || null,
+        photo: r.photo || null,
+        motionScore: r.motionScore ?? null,
+        faceDistance: r.faceDistance ?? null,
+        createdAt: Number(r.createdAt) || now(),
+        reviewedAt: r.reviewedAt ?? null,
+      });
+    }
+  }
+
+  reloadFromDb();
+  touch();
+  return { classes: classes.length, students: STUDENTS.length, sessions: sessions.length };
 }
 
 export function seed() {

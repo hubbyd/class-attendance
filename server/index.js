@@ -22,6 +22,9 @@ import {
   studentById,
   faceEnrolled,
   setStudentFace,
+  exportState,
+  importState,
+  getRevision,
 } from './store.js';
 import { verify, review } from './anticheat.js';
 
@@ -54,7 +57,7 @@ function readBody(req) {
     let data = '';
     req.on('data', (c) => {
       data += c;
-      if (data.length > 20 * 1024 * 1024) reject(new Error('payload too large'));
+      if (data.length > 128 * 1024 * 1024) reject(new Error('payload too large'));
     });
     req.on('end', () => {
       if (!data) return resolve({});
@@ -206,7 +209,38 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         classes: classes.map(classSummary),
         sessions: sessions.map((s) => ({ id: s.id, classId: s.classId, title: s.title, status: s.status })),
+        // 供学委端判断「服务端是否已被清空」（免费部署重启会清库）
+        totals: {
+          classes: classes.length,
+          sessions: sessions.length,
+          records: sessions.reduce((n, s) => n + s.records.length, 0),
+        },
+        rev: getRevision(),
       });
+    }
+
+    // 数据版本号（轻量轮询：学委端据此判断本机备份是否需要更新）
+    if (m === 'GET' && p === '/api/backup/rev') {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
+      return send(res, 200, { rev: getRevision() });
+    }
+
+    // 全量数据导出（供学委端在本机留一份备份）
+    if (m === 'GET' && p === '/api/backup') {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
+      return send(res, 200, exportState());
+    }
+
+    // 从备份整库恢复（覆盖服务端现有数据）
+    if (m === 'POST' && p === '/api/restore') {
+      if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
+      const body = await readBody(req);
+      try {
+        const stats = importState(body);
+        return send(res, 200, { ok: true, ...stats, rev: getRevision() });
+      } catch (e) {
+        return send(res, 400, { error: e.message });
+      }
     }
 
     // 校验学委口令（学委端进入前调用）

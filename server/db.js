@@ -92,6 +92,21 @@ export function allStudents() {
     .map((s) => ({ ...s, faceDescriptor: s.faceDescriptor ? JSON.parse(s.faceDescriptor) : null }));
 }
 
+// 整批写入学生主表（含人脸底照），用于从备份整库恢复
+export function insertStudentsFull(list) {
+  const stmt = db.prepare(
+    'INSERT OR REPLACE INTO students (id, name, studentNo, faceDescriptor) VALUES (?, ?, ?, ?)',
+  );
+  list.forEach((s) =>
+    stmt.run(s.id, s.name, s.studentNo, s.faceDescriptor ? JSON.stringify(s.faceDescriptor) : null),
+  );
+}
+
+// 清空全部业务表（从备份整库恢复前调用）
+export function clearAll() {
+  db.exec('DELETE FROM records; DELETE FROM sessions; DELETE FROM class_students; DELETE FROM classes; DELETE FROM students;');
+}
+
 // 保存/更新某人的人脸底照特征向量（再次采集即覆盖）
 export function setFaceDescriptor(id, descriptor) {
   db.prepare('UPDATE students SET faceDescriptor = ? WHERE id = ?').run(

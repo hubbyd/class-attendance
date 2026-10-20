@@ -5,9 +5,28 @@ import TeacherSession from './pages/TeacherSession.jsx';
 import Student from './pages/Student.jsx';
 import History from './pages/History.jsx';
 import { api, savedTeacherCode } from './api.js';
+import { syncIfChanged } from './backup.js';
 
 export function navigate(to) {
   window.location.hash = to;
+}
+
+// 学委端后台自动备份：每 10 秒检查一次服务端数据版本，有变化就把全量数据存到本机，
+// 以免免费云部署重启清库后数据无法找回。
+function AutoBackup() {
+  useEffect(() => {
+    let stop = false;
+    const tick = () => {
+      if (!stop) syncIfChanged();
+    };
+    tick();
+    const t = setInterval(tick, 10000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, []);
+  return null;
 }
 
 function parseHash() {
@@ -85,7 +104,12 @@ function TeacherGate({ children }) {
     );
   }
 
-  return children;
+  return (
+    <>
+      <AutoBackup />
+      {children}
+    </>
+  );
 }
 
 export default function App() {

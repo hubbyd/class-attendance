@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { api } from '../api.js';
 import { navigate } from '../App.jsx';
 import { normalizeRoster, normalizeTimetable, readTable, textToRows } from '../import.js';
+import { readLocalMeta, snapshotToLocal, restoreFromLocal } from '../backup.js';
 
 const WEEKDAY = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
 
@@ -46,6 +47,12 @@ export default function Teacher() {
   const [timetableText, setTimetableText] = useState('');
   const [rosterRows, setRosterRows] = useState([]);
   const [timetableRows, setTimetableRows] = useState([]);
+  // 数据备份（免费云部署重启会清空服务器数据）：本机留一份，可一键恢复
+  const [localMeta, setLocalMeta] = useState(null);
+  const [totals, setTotals] = useState(null);
+  const [backupMsg, setBackupMsg] = useState('');
+  const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const parsedRoster = useMemo(
     () => normalizeRoster([...rosterRows, ...textToRows(rosterText)]),
@@ -94,8 +101,65 @@ export default function Teacher() {
     try {
       const b = await api.bootstrap();
       setClasses(b.classes);
+      setTotals(b.totals);
     } catch (e) {
       setErr(e.message);
+    }
+  }
+
+  // 后台自动备份在 App 层每 10 秒跑一次，这里只轮询读取"本机备份"状态用于展示
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      try {
+        const m = await readLocalMeta();
+        if (!stop) setLocalMeta(m);
+      } catch {
+        /* 浏览器不支持 IndexedDB 时静默忽略 */
+      }
+    };
+    tick();
+    const t = setInterval(tick, 5000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, []);
+
+  async function backupNow() {
+    setErr('');
+    setBackupMsg('');
+    setBackingUp(true);
+    try {
+      const m = await snapshotToLocal();
+      setLocalMeta(m);
+      setBackupMsg('已把当前全部数据备份到本机');
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBackingUp(false);
+    }
+  }
+
+  async function restoreNow() {
+    const yes = window.confirm(
+      '将用本机备份覆盖服务器现有数据（班级、课表、名册、场次与签到记录），确定继续吗？',
+    );
+    if (!yes) return;
+    setErr('');
+    setBackupMsg('');
+    setRestoring(true);
+    try {
+      const { stats, meta } = await restoreFromLocal();
+      setLocalMeta(meta);
+      setBackupMsg(
+        `已恢复：班级 ${stats.classes} 个 · 场次 ${stats.sessions} 场 · 学生 ${stats.students} 人`,
+      );
+      await load();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -260,6 +324,9 @@ export default function Teacher() {
     }
   }
 
+  const hasLocalBackup = !!(localMeta && localMeta.counts && localMeta.counts.records > 0);
+  const serverEmpty = !!totals && totals.records === 0;
+
   return (
     <div className="wrap">
       {err && <div className="banner bad" style={{ marginTop: 16 }}>{err}</div>}
@@ -268,6 +335,55 @@ export default function Teacher() {
         <div className="banner ok">
           使用方法：把班级的“固定签到入口”发到班级群<b>一次即可</b>（链接和二维码永久不变）。每次上课只需点「发起本次签到」，同学点开原链接就能签到，无需重新发链接，也无需一直挂着屏幕。
         </div>
+      </div>
+
+      <div className="card">
+        <h2>数据备份 · 防免费部署丢数据</h2>
+        <div className="hint" style={{ marginTop: 6 }}>
+          本系统部署在免费云服务上，<b>每次重新部署或重启都会清空服务器数据</b>。
+          学委端会自动把全部数据（班级、课表、名册、场次、签到记录、人脸底照）备份到本机浏览器；
+          若服务器被清空，点「从本机备份恢复」即可放回。换手机或清空浏览器会丢失本机备份，请注意。
+        </div>
+
+        {hasLocalBackup && serverEmpty && (
+          <div className="banner warn" style={{ marginTop: 10 }}>
+            ⚠️ 检测到服务器数据为空（可能因重新部署被清空），而本机存有备份
+            （{localMeta.counts.classes} 个班级 / {localMeta.counts.sessions} 场 / {localMeta.counts.records} 条记录）。
+            点下方「从本机备份恢复」即可找回。
+          </div>
+        )}
+
+        <div className="grid c2" style={{ marginTop: 10 }}>
+          <div className="stat">
+            <b>{localMeta ? new Date(localMeta.savedAt).toLocaleString('zh-CN') : '尚无备份'}</b>
+            <span>本机上次备份时间</span>
+          </div>
+          <div className="stat">
+            <b>
+              {localMeta
+                ? `${localMeta.counts.classes} 班 · ${localMeta.counts.sessions} 场 · ${localMeta.counts.records} 条`
+                : '—'}
+            </b>
+            <span>本机备份内容</span>
+          </div>
+        </div>
+
+        {totals && (
+          <div className="hint" style={{ marginTop: 8 }}>
+            服务器当前：班级 {totals.classes} 个 · 场次 {totals.sessions} 场 · 记录 {totals.records} 条
+          </div>
+        )}
+
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="btn primary" onClick={backupNow} disabled={backingUp}>
+            {backingUp ? '备份中…' : '💾 立即备份到本机'}
+          </button>
+          <button className="btn" onClick={restoreNow} disabled={restoring || !localMeta}>
+            {restoring ? '恢复中…' : '♻️ 从本机备份恢复'}
+          </button>
+        </div>
+
+        {backupMsg && <div className="banner ok" style={{ marginTop: 10 }}>{backupMsg}</div>}
       </div>
 
       <div className="card">
