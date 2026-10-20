@@ -36,6 +36,9 @@ export const api = {
   setStudentStatus: (sid, b) =>
     req(`/sessions/${sid}/records/status`, { method: 'POST', body: JSON.stringify(b) }),
   history: (cid) => req('/classes/' + cid + '/history'),
+  // 导员端（公开只读）：班级列表与每节课考勤
+  counselorClasses: () => req('/counselor/classes'),
+  counselorHistory: (cid) => req('/counselor/classes/' + cid + '/history'),
   backupRev: () => req('/backup/rev'),
   backup: () => req('/backup'),
   restore: (payload) => req('/restore', { method: 'POST', body: JSON.stringify(payload) }),

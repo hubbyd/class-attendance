@@ -24,6 +24,13 @@ export default function Home() {
             🎒 学生端 · 定位 / 拍照签到
           </button>
         </div>
+        <button
+          className="btn block"
+          style={{ marginTop: 12, padding: 18, fontSize: 15 }}
+          onClick={() => navigate('/counselor')}
+        >
+          🧑‍🏫 导员端 · 查看每节课考勤（只读）
+        </button>
       </div>
 
       <div className="card">

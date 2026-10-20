@@ -243,6 +243,35 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // 导员端（公开只读）：班级列表
+    if (m === 'GET' && p === '/api/counselor/classes') {
+      return send(res, 200, {
+        classes: classes.map((c) => ({
+          id: c.id,
+          name: c.name,
+          roomName: c.roomName,
+          studentCount: c.studentIds.length,
+          sessionCount: sessions.filter((s) => s.classId === c.id).length,
+        })),
+      });
+    }
+
+    // 导员端（公开只读）：某班每节课的考勤统计 + 学生明细
+    const ch = p.match(/^\/api\/counselor\/classes\/([^/]+)\/history$/);
+    if (m === 'GET' && ch) {
+      const c = classes.find((x) => x.id === ch[1]);
+      if (!c) return send(res, 404, { error: '班级不存在' });
+      const students = c.studentIds.map((sid) => {
+        const stu = studentById(sid);
+        return stu ? { id: stu.id, name: stu.name, studentNo: stu.studentNo } : { id: sid, name: sid, studentNo: '' };
+      });
+      const list = sessions
+        .filter((s) => s.classId === c.id)
+        .sort((a, b) => b.startAt - a.startAt)
+        .map(sessionSummary);
+      return send(res, 200, { classId: c.id, className: c.name, students, sessions: list });
+    }
+
     // 校验学委口令（学委端进入前调用）
     if (m === 'POST' && p === '/api/teacher/verify') {
       const body = await readBody(req);

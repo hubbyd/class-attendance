@@ -4,6 +4,7 @@ import Teacher from './pages/Teacher.jsx';
 import TeacherSession from './pages/TeacherSession.jsx';
 import Student from './pages/Student.jsx';
 import History from './pages/History.jsx';
+import Counselor from './pages/Counselor.jsx';
 import { api, savedTeacherCode } from './api.js';
 import { syncIfChanged } from './backup.js';
 
@@ -142,6 +143,7 @@ export default function App() {
         <History classId={route.params.get('class')} />
       </TeacherGate>
     );
+  else if (route.path.startsWith('/counselor')) page = <Counselor />;
   else if (isStudent) page = <Student sid={route.params.get('sid')} classId={route.params.get('class')} />;
 
   return (
