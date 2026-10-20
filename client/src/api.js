@@ -36,4 +36,7 @@ export const api = {
   setStudentStatus: (sid, b) =>
     req(`/sessions/${sid}/records/status`, { method: 'POST', body: JSON.stringify(b) }),
   history: (cid) => req('/classes/' + cid + '/history'),
+  student: (id) => req('/students/' + id),
+  enrollFace: (id, descriptor) =>
+    req(`/students/${id}/face`, { method: 'POST', body: JSON.stringify({ descriptor }) }),
 };

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { deviceFingerprint } from '../fingerprint.js';
 import { FLAG_LABEL } from '../flags.js';
+import { ensureFaceModels, extractDescriptor } from '../face.js';
 
 export default function Student({ sid, classId }) {
   const [sessionId, setSessionId] = useState(sid || '');
@@ -10,12 +11,16 @@ export default function Student({ sid, classId }) {
   const [classInfo, setClassInfo] = useState(null);
 
   const [studentId, setStudentId] = useState('');
-  const [method, setMethod] = useState('gps');
   const [loc, setLoc] = useState(null);
   const [locMsg, setLocMsg] = useState('');
   const [photo, setPhoto] = useState('');
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // 人脸底照：是否已采集（来自服务端名册），本地覆盖用于采集成功后即时反馈
+  const [enrolledLocal, setEnrolledLocal] = useState({});
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollMsg, setEnrollMsg] = useState('');
 
   const fp = useRef(deviceFingerprint());
 
@@ -84,6 +89,8 @@ export default function Student({ sid, classId }) {
   function onPickPhoto(e) {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
+    setPhoto('');
+    setEnrollMsg('');
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
@@ -100,23 +107,55 @@ export default function Student({ sid, classId }) {
     reader.readAsDataURL(f);
   }
 
+  // 采集/更新人脸底照：用当前照片提取 128 维特征后存到服务端（再次采集即覆盖）
+  async function enrollFace() {
+    setErr('');
+    setEnrollMsg('');
+    if (!studentId) return setErr('请先选择你的身份');
+    if (!photo) return setErr('请先现场拍一张本人照片，再用它采集人脸底照');
+    setEnrolling(true);
+    try {
+      const descriptor = await extractDescriptor(photo);
+      await api.enrollFace(studentId, descriptor);
+      setEnrolledLocal((m) => ({ ...m, [studentId]: true }));
+      setEnrollMsg('✅ 人脸底照已采集，本次及以后签到会自动与本人比对');
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setEnrolling(false);
+    }
+  }
+
   async function submit() {
     setErr('');
     setResult(null);
+    setEnrollMsg('');
     if (!s) return setErr('请先进入签到场次');
     if (s.status !== 'active') return setErr('该签到场次已结束');
     if (!studentId) return setErr('请选择你的身份');
     if (!loc) return setErr('请先获取定位');
-    if (method === 'photo' && !photo) return setErr('请先拍照');
+    if (!photo) return setErr('请先现场拍照（本人头像）');
     setSubmitting(true);
+    // 现场提取人脸特征（本地推理）；若识别组件不可用则不带特征提交，由学委人工复核
+    let faceDescriptor;
+    if (await ensureFaceModels()) {
+      try {
+        faceDescriptor = await extractDescriptor(photo);
+      } catch (e) {
+        setErr(e.message);
+        setSubmitting(false);
+        return;
+      }
+    }
     try {
       const r = await api.checkin(s.id, {
         studentId,
         passcode: s.passcode, // 自动带入当前动态口令，学生无需手动输入
         deviceFingerprint: fp.current,
         location: { lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy },
-        checkinType: method,
-        photo: method === 'photo' ? photo : undefined,
+        checkinType: 'photo',
+        photo,
+        faceDescriptor,
       });
       setResult(r);
     } catch (e) {
@@ -169,6 +208,7 @@ export default function Student({ sid, classId }) {
   // 已签到 / 已提交待复核的同学：不允许再次提交（服务端同样会拒绝）
   const mine = s.roster.find((r) => r.id === studentId);
   const blocked = mine && (mine.status === 'present' || mine.status === 'flagged');
+  const enrolled = studentId ? (enrolledLocal[studentId] ?? !!mine?.faceEnrolled) : false;
 
   return (
     <div className="wrap narrow">
@@ -178,7 +218,7 @@ export default function Student({ sid, classId }) {
           {s.status === 'active' ? <span className="pill present">进行中</span> : <span className="pill absent">已结束</span>}
         </div>
         <div className="muted small" style={{ marginTop: 6 }}>
-          {s.className} · 🏫 {s.roomName} · 需在 {s.radiusMeters}m 围栏内
+          {s.className} · 🏫 {s.roomName} · 需在 {s.radiusMeters}m 围栏内 · 须现场拍照并由系统比对本人
         </div>
       </div>
 
@@ -223,22 +263,10 @@ export default function Student({ sid, classId }) {
         </div>
       </div>
 
-      {/* 2. 签到方式 */}
+      {/* 2. 定位 */}
       <div className="card">
         <div className="step active">
           <div className="n">2</div>
-          <div><b>选择签到方式</b></div>
-        </div>
-        <div className="row" style={{ marginTop: 8 }}>
-          <button className={`btn ${method === 'gps' ? 'primary' : ''}`} onClick={() => setMethod('gps')}>📍 定位签到</button>
-          <button className={`btn ${method === 'photo' ? 'primary' : ''}`} onClick={() => setMethod('photo')}>🤳 拍照签到</button>
-        </div>
-      </div>
-
-      {/* 3. 定位 */}
-      <div className="card">
-        <div className="step active">
-          <div className="n">3</div>
           <div><b>获取定位</b> <span className="muted small">（超出教室围栏会被拒绝）</span></div>
         </div>
         <div className="row" style={{ marginTop: 8 }}>
@@ -252,33 +280,51 @@ export default function Student({ sid, classId }) {
         )}
       </div>
 
-      {/* 4. 现场拍照（拍照签到） */}
-      {method === 'photo' && (
+      {/* 3. 现场拍照（所有签到均须拍照，防止纯定位被备用机代签） */}
+      <div className="card">
+        <div className="step active">
+          <div className="n">3</div>
+          <div><b>现场拍照</b> <span className="muted small">（调用手机相机，拍摄本人头像）</span></div>
+        </div>
+        <input
+          type="file"
+          accept="image/*"
+          capture="user"
+          onChange={onPickPhoto}
+          style={{ display: 'none' }}
+          id="photo-input"
+        />
+        <label htmlFor="photo-input" className="btn primary block" style={{ marginTop: 10, textAlign: 'center' }}>
+          {photo ? '重新拍照' : '📷 拍照'}
+        </label>
+        {photo && (
+          <div style={{ marginTop: 12 }}>
+            <img src={photo} alt="签到照片" className="preview" style={{ maxHeight: 240, objectFit: 'cover' }} />
+          </div>
+        )}
+      </div>
+
+      {/* 4. 人脸底照采集（首次使用仅需一次；采集后再签到才会与本人比对） */}
+      {studentId && !enrolled && (
         <div className="card">
           <div className="step active">
             <div className="n">4</div>
-            <div><b>现场拍照</b> <span className="muted small">（调用手机相机，拍摄本人头像）</span></div>
+            <div><b>采集人脸底照</b> <span className="muted small">（首次使用仅需一次）</span></div>
           </div>
-          <input
-            type="file"
-            accept="image/*"
-            capture="user"
-            onChange={onPickPhoto}
-            style={{ display: 'none' }}
-            id="photo-input"
-          />
-          <label htmlFor="photo-input" className="btn primary block" style={{ marginTop: 10, textAlign: 'center' }}>
-            {photo ? '重新拍照' : '📷 拍照'}
-          </label>
-          {photo && (
-            <div style={{ marginTop: 12 }}>
-              <img src={photo} alt="签到照片" className="preview" style={{ maxHeight: 240, objectFit: 'cover' }} />
-            </div>
-          )}
+          <div className="hint" style={{ marginTop: 6 }}>
+            你还未采集人脸底照。采集后，每次签到都会用现场照片与你的底照做 1:1 比对，
+            他人拿备用机替你签到会因「人脸与本人不符」被直接拒绝。
+            未采集时本次签到会转交学委人工复核。
+          </div>
+          <button className="btn primary block" style={{ marginTop: 10 }} onClick={enrollFace} disabled={enrolling || !photo}>
+            {enrolling ? '采集中…' : '🙂 用当前照片采集人脸底照'}
+          </button>
+          {enrollMsg && <div className="banner ok" style={{ marginTop: 10 }}>{enrollMsg}</div>}
         </div>
       )}
 
       <div className="card">
+        {enrollMsg && enrolled && <div className="banner ok" style={{ marginBottom: 10 }}>{enrollMsg}</div>}
         {blocked && (
           <div className={`banner ${mine.status === 'present' ? 'ok' : 'warn'}`} style={{ marginBottom: 10 }}>
             {mine.status === 'present'
@@ -290,7 +336,7 @@ export default function Student({ sid, classId }) {
           {submitting ? '提交中…' : blocked ? '你已签到' : '提交签到'}
         </button>
         <div className="hint" style={{ marginTop: 8, textAlign: 'center' }}>
-          提交时会同时校验：定位围栏 · 设备指纹 · 当前口令（自动带入）
+          提交时会同时校验：定位围栏 · 设备指纹 · 现场人脸比对（1:1）· 当前口令（自动带入）
         </div>
       </div>
     </div>

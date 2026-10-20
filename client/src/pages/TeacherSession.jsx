@@ -250,7 +250,7 @@ export default function TeacherSession({ id }) {
         <table>
           <thead>
             <tr>
-              <th>学号</th><th>姓名</th><th>当前状态</th><th>手动改为</th>
+              <th>学号</th><th>姓名</th><th>人脸底照</th><th>当前状态</th><th>手动改为</th>
             </tr>
           </thead>
           <tbody>
@@ -258,6 +258,7 @@ export default function TeacherSession({ id }) {
               <tr key={r.id}>
                 <td className="mono small">{r.studentNo}</td>
                 <td><b>{r.name}</b></td>
+                <td>{r.faceEnrolled ? <span className="hint">✓ 已采集</span> : <span className="hint" style={{ color: 'var(--warn)' }}>未采集</span>}</td>
                 <td><span className={`pill ${r.status}`}>{STATUS_LABEL[r.status] || r.status}</span></td>
                 <td>
                   <select value="" onChange={(e) => changeStatus(r.id, e.target.value)}>
@@ -291,6 +292,7 @@ export default function TeacherSession({ id }) {
               <div className="stat"><b>{reviewing.distance == null ? '—' : reviewing.distance + 'm'}</b><span>与教室中心距离</span></div>
               <div className="stat"><b>{reviewing.location?.accuracy != null ? reviewing.location.accuracy + 'm' : '—'}</b><span>定位精度</span></div>
               <div className="stat"><b>{reviewing.motionScore == null ? '—' : reviewing.motionScore.toFixed(3)}</b><span>活体运动量</span></div>
+              <div className="stat"><b>{reviewing.faceDistance == null ? '—' : reviewing.faceDistance.toFixed(3)}</b><span>人脸-底照距离</span></div>
               <div className="stat"><b className="mono" style={{ fontSize: 14 }}>{reviewing.deviceFingerprint}</b><span>设备指纹</span></div>
             </div>
 

@@ -10,6 +10,7 @@ import {
   updateSessionStatus,
   insertRecord,
   updateRecordStatus,
+  setFaceDescriptor as setFaceDescriptorRow,
 } from './db.js';
 
 export const now = () => Date.now();
@@ -142,6 +143,21 @@ export function addStudents(list) {
 export function getTimetable(classId) {
   const c = classes.find((x) => x.id === classId);
   return c && Array.isArray(c.timetable) ? c.timetable : [];
+}
+
+// 是否已采集人脸底照（用于前端提示与签到核验）
+export const faceEnrolled = (studentId) => {
+  const s = studentById(studentId);
+  return !!(s && Array.isArray(s.faceDescriptor) && s.faceDescriptor.length);
+};
+
+// 采集/更新某人的人脸底照特征（再次采集即覆盖）
+export function setStudentFace(studentId, descriptor) {
+  const s = studentById(studentId);
+  if (!s) return null;
+  s.faceDescriptor = Array.isArray(descriptor) && descriptor.length ? descriptor : null;
+  setFaceDescriptorRow(studentId, s.faceDescriptor);
+  return s;
 }
 
 const newSecret = () => crypto.randomBytes(16);

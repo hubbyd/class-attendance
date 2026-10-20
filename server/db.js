@@ -64,6 +64,18 @@ CREATE INDEX IF NOT EXISTS idx_sessions_class ON sessions(classId);
   if (!cols.includes('timetable')) db.exec('ALTER TABLE classes ADD COLUMN timetable TEXT');
 }
 
+// 兼容旧库：为 students 增补人脸底照特征（128 维向量的 JSON 文本，幂等）
+{
+  const cols = db.prepare('PRAGMA table_info(students)').all().map((c) => c.name);
+  if (!cols.includes('faceDescriptor')) db.exec('ALTER TABLE students ADD COLUMN faceDescriptor TEXT');
+}
+
+// 兼容旧库：为 records 增补人脸比对距离（1:1 比对的欧氏距离，幂等）
+{
+  const cols = db.prepare('PRAGMA table_info(records)').all().map((c) => c.name);
+  if (!cols.includes('faceDistance')) db.exec('ALTER TABLE records ADD COLUMN faceDistance REAL');
+}
+
 export { db };
 
 /* ---------------- students ---------------- */
@@ -74,7 +86,18 @@ export function ensureStudents(students) {
 }
 
 export function allStudents() {
-  return db.prepare('SELECT id, name, studentNo FROM students').all();
+  return db
+    .prepare('SELECT id, name, studentNo, faceDescriptor FROM students')
+    .all()
+    .map((s) => ({ ...s, faceDescriptor: s.faceDescriptor ? JSON.parse(s.faceDescriptor) : null }));
+}
+
+// 保存/更新某人的人脸底照特征向量（再次采集即覆盖）
+export function setFaceDescriptor(id, descriptor) {
+  db.prepare('UPDATE students SET faceDescriptor = ? WHERE id = ?').run(
+    descriptor ? JSON.stringify(descriptor) : null,
+    id,
+  );
 }
 
 /* ---------------- classes ---------------- */
@@ -150,8 +173,8 @@ export function insertRecord(r) {
   db.prepare(
     `INSERT INTO records
        (id, sessionId, studentId, name, studentNo, checkinType, status, flags, distance,
-        locationLat, locationLng, accuracy, deviceFingerprint, photo, motionScore, createdAt, reviewedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        locationLat, locationLng, accuracy, deviceFingerprint, photo, motionScore, faceDistance, createdAt, reviewedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     r.id, r.sessionId, r.studentId, r.name, r.studentNo, r.checkinType, r.status,
     JSON.stringify(r.flags || []),
@@ -162,6 +185,7 @@ export function insertRecord(r) {
     r.deviceFingerprint,
     r.photo,
     r.motionScore,
+    r.faceDistance ?? null,
     r.createdAt,
     r.reviewedAt ?? null,
   );

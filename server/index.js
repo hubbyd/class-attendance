@@ -20,6 +20,8 @@ import {
   persistRecordStatus,
   setStudentStatus,
   studentById,
+  faceEnrolled,
+  setStudentFace,
 } from './store.js';
 import { verify, review } from './anticheat.js';
 
@@ -92,7 +94,13 @@ function sessionDTO(s) {
   const roster = cls
     ? cls.studentIds.map((sid) => {
         const st = studentById(sid);
-        return { id: sid, name: st ? st.name : sid, studentNo: st ? st.studentNo : '', status: studentStatus(s, sid) };
+        return {
+          id: sid,
+          name: st ? st.name : sid,
+          studentNo: st ? st.studentNo : '',
+          status: studentStatus(s, sid),
+          faceEnrolled: faceEnrolled(sid),
+        };
       })
     : [];
   return {
@@ -208,6 +216,31 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true });
     }
 
+    // 学生人脸底照：查询是否已采集 / 采集（再次采集即覆盖，用于签到时的 1:1 比对）
+    let sm = p.match(/^\/api\/students\/([^/]+)$/);
+    if (m === 'GET' && sm) {
+      const stu = studentById(sm[1]);
+      if (!stu) return send(res, 404, { error: '学生不存在' });
+      return send(res, 200, {
+        id: stu.id,
+        name: stu.name,
+        studentNo: stu.studentNo,
+        faceEnrolled: faceEnrolled(stu.id),
+      });
+    }
+    sm = p.match(/^\/api\/students\/([^/]+)\/face$/);
+    if (m === 'POST' && sm) {
+      const stu = studentById(sm[1]);
+      if (!stu) return send(res, 404, { error: '学生不存在' });
+      const body = await readBody(req);
+      const d = body.descriptor;
+      if (!Array.isArray(d) || d.length !== 128 || d.some((v) => typeof v !== 'number' || !isFinite(v))) {
+        return send(res, 400, { error: '人脸特征格式不正确（需 128 维数值向量）' });
+      }
+      setStudentFace(stu.id, d);
+      return send(res, 200, { ok: true, faceEnrolled: true });
+    }
+
     // 新建班级（可同时导入班级人员与班级课表）
     if (m === 'POST' && p === '/api/classes') {
       if (!teacherAuthed(req)) return send(res, 401, { error: '需要学委口令' });
@@ -243,7 +276,15 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         ...classSummary(c),
         timetable: c.timetable || [],
-        roster: c.studentIds.map((sid) => studentById(sid)).filter(Boolean),
+        roster: c.studentIds
+          .map((sid) => studentById(sid))
+          .filter(Boolean)
+          .map((st) => ({
+            id: st.id,
+            name: st.name,
+            studentNo: st.studentNo,
+            faceEnrolled: faceEnrolled(st.id),
+          })),
       });
     }
 
